@@ -2,7 +2,8 @@
 import os
 import json
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Form
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -181,13 +182,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Mount frontend BEFORE any other routes
-frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
-if os.path.exists(frontend_path):
-    logger.info(f"✅ Frontend mounted from: {frontend_path}")
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-else:
-    logger.error(f"❌ Frontend path not found: {frontend_path}")
 
 
 # ==================== API ENDPOINTS ====================
@@ -215,37 +209,101 @@ async def get_config():
         "expiries": get_static_expiries()
     }
 
-
 @app.post("/api/login")
-async def login(totp_secret: str, mpin: str):
+async def login(totp_secret: str = Form(...), mpin: str = Form(...)):
     """Login endpoint for authentication"""
     global kotak_api
     
     if not kotak_api:
         return {"status": "error", "message": "API not initialized"}
     
-    # Step 1: Login with TOTP
-    view_data = kotak_api.login_with_totp(totp_secret)
-    if not view_data:
-        return {"status": "error", "message": "TOTP login failed"}
+    logger.info(f"🔄 Login attempt for client: {KOTAK_CONFIG['client_code']}")
     
-    # Step 2: Validate MPIN
-    session_data = kotak_api.validate_mpin(
-        view_data.get("token"),
-        view_data.get("sid"),
-        mpin
-    )
+    # ... rest of the code stays the same ...
     
-    if session_data:
-        logger.info("✅ User successfully authenticated with Kotak")
+    try:
+        # Step 1: TOTP Login (totp_secret is actually the 6-digit code from user)
+        headers = {
+            "Authorization": KOTAK_CONFIG["access_token"],
+            "neo-fin-key": "neotradeapi",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "mobileNumber": KOTAK_CONFIG["mobile_number"],
+            "ucc": KOTAK_CONFIG["client_code"],
+            "totp": totp_secret  # This is the 6-digit code
+        }
+        
+        response = requests.post(
+            "https://mis.kotaksecurities.com/login/1.0/tradeApiLogin",
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"❌ TOTP login failed: {response.status_code}")
+            return {"status": "error", "message": f"TOTP login failed: {response.status_code}"}
+        
+        data = response.json()
+        
+        if data.get("data", {}).get("status") != "success":
+            logger.error(f"❌ TOTP error: {data}")
+            return {"status": "error", "message": "Invalid TOTP code"}
+        
+        view_token = data["data"]["token"]
+        view_sid = data["data"]["sid"]
+        logger.info("✅ TOTP login successful")
+        
+        # Step 2: MPIN Validate
+        headers = {
+            "Authorization": KOTAK_CONFIG["access_token"],
+            "neo-fin-key": "neotradeapi",
+            "Content-Type": "application/json",
+            "sid": view_sid,
+            "Auth": view_token
+        }
+        
+        payload = {"mpin": mpin}
+        
+        response = requests.post(
+            "https://mis.kotaksecurities.com/login/1.0/tradeApiValidate",
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"❌ MPIN validation failed: {response.status_code}")
+            return {"status": "error", "message": f"MPIN validation failed: {response.status_code}"}
+        
+        data = response.json()
+        
+        if data.get("data", {}).get("status") != "success":
+            logger.error(f"❌ MPIN error: {data}")
+            return {"status": "error", "message": "Invalid MPIN"}
+        
+        # Update global kotak_api with session tokens
+        kotak_api.session_token = data["data"]["token"]
+        kotak_api.session_sid = data["data"]["sid"]
+        kotak_api.base_url = data["data"]["baseUrl"]
+        kotak_api.is_authenticated = True
+        
+        logger.info("✅ MPIN validation successful")
+        logger.info(f"📋 Session established. Base URL: {kotak_api.base_url}")
+        
         return {
             "status": "success",
             "message": "Authentication successful",
             "user": KOTAK_CONFIG.get("client_code"),
             "authenticated": True
         }
-    else:
-        return {"status": "error", "message": "MPIN validation failed"}
+        
+    except Exception as e:
+        logger.error(f"❌ Login exception: {str(e)}")
+        return {"status": "error", "message": f"Login failed: {str(e)}"}
+
 
 
 @app.get("/api/indices")
@@ -360,14 +418,12 @@ async def scrip_lookup(query: str):
 
 @app.get("/api/option-chain")
 async def get_option_chain(market: str, index: str, expiry: str, strikes: str = "25"):
-    """Fetch live option chain from Kotak API with 1-second caching"""
+    """Fetch live option chain from Kotak API"""
     global kotak_api, cache
     
     cache_key = f"option_chain_{market}_{index}_{expiry}_{strikes}"
     
-    # Return cached data if valid (1 second cache)
     if is_cache_valid(cache_key) and cache_key in cache["option_chain"]:
-        logger.debug(f"📦 Returning cached option chain: {index}")
         return {
             "success": True,
             "data": cache["option_chain"][cache_key],
@@ -376,55 +432,102 @@ async def get_option_chain(market: str, index: str, expiry: str, strikes: str = 
         }
     
     if not kotak_api or not kotak_api.is_authenticated:
-        logger.warning("⚠️ Not authenticated, cannot fetch option chain")
-        return {
-            "success": False,
-            "message": "Not authenticated with Kotak"
-        }
+        logger.warning("⚠️ Not authenticated")
+        return {"success": False, "message": "Not authenticated"}
     
     try:
-        headers = kotak_api.get_headers()
+        # Parse expiry: "06-Nov-2025" -> "06NOV25"
+        expiry_date = datetime.strptime(expiry, "%d-%b-%Y")
+        expiry_str = expiry_date.strftime("%d%b%y").upper()
         
-        # Build symbol for Kotak API (e.g., NIFTY25JAN18200CE)
-        symbol = f"{index}{expiry.replace('-', '')}@{market}|NIFTY"
+        atm_strike = get_atm_strike(index)
+        strike_count = int(strikes)
         
-        # Kotak option chain endpoint
-        url = f"{kotak_api.base_url}/option-chain?symbol={symbol}"
+        # Build query for all strikes at once
+        queries = []
+        for i in range(-strike_count//2, strike_count//2 + 1):
+            strike = atm_strike + (i * 100)
+            call_symbol = f"{market.lower()}|{index}{expiry_str}C{strike}"
+            put_symbol = f"{market.lower()}|{index}{expiry_str}P{strike}"
+            queries.append(f"{call_symbol},{put_symbol}")
+        
+        # Join all queries
+        query_string = ",".join(queries)
+        
+        headers = {
+            "Authorization": KOTAK_CONFIG["access_token"],
+            "Content-Type": "application/json"
+        }
+        
+        # Fetch all quotes at once
+        url = f"{kotak_api.base_url}/script-details/1.0/quotes/neo/symbol?query={query_string}&filtername=all"
         
         response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                chain_data = data.get("data", [])
+            quotes = response.json()
+            
+            chain_data = []
+            for i in range(-strike_count//2, strike_count//2 + 1):
+                strike = atm_strike + (i * 100)
                 
-                # Filter by strike count if needed
-                if strikes != "all":
-                    try:
-                        limit = int(strikes)
-                        chain_data = chain_data[:limit]
-                    except ValueError:
-                        pass
+                # Find quotes for this strike
+                call_data = {"bid": 0, "ask": 0, "ltp": 0}
+                put_data = {"bid": 0, "ask": 0, "ltp": 0}
                 
-                # Cache the result
-                cache["option_chain"][cache_key] = chain_data
-                cache["last_update"][cache_key] = time.time()
+                for quote in (quotes if isinstance(quotes, list) else []):
+                    symbol = quote.get("displaysymbol", "")
+                    
+                    if f"C{strike}" in symbol:
+                        call_data = {
+                            "bid": float(quote.get("totalbuy", 0)),
+                            "ask": float(quote.get("totalsell", 0)),
+                            "ltp": float(quote.get("ltp", 0))
+                        }
+                    elif f"P{strike}" in symbol:
+                        put_data = {
+                            "bid": float(quote.get("totalbuy", 0)),
+                            "ask": float(quote.get("totalsell", 0)),
+                            "ltp": float(quote.get("ltp", 0))
+                        }
                 
-                logger.info(f"✅ Fetched option chain: {index} ({len(chain_data)} strikes)")
-                return {
-                    "success": True,
-                    "data": chain_data,
-                    "cached": False,
-                    "timestamp": datetime.now().isoformat()
-                }
-    
+                chain_data.append({
+                    "strike": strike,
+                    "call": call_data,
+                    "put": put_data
+                })
+            
+            cache["option_chain"][cache_key] = chain_data
+            cache["last_update"][cache_key] = time.time()
+            
+            logger.info(f"✅ Fetched {len(chain_data)} strikes")
+            return {
+                "success": True,
+                "data": chain_data,
+                "cached": False,
+                "timestamp": datetime.now().isoformat()
+            }
+        
     except Exception as e:
-        logger.error(f"❌ Failed to fetch option chain: {str(e)}")
+        logger.error(f"❌ Option chain error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
     
-    return {
-        "success": False,
-        "message": "Failed to fetch option chain"
+    return {"success": False, "message": "Failed to fetch option chain"}
+
+
+
+def get_atm_strike(index: str) -> int:
+    """Get approximate ATM strike based on index"""
+    atm_map = {
+        "NIFTY": 24000,
+        "BANKNIFTY": 52000,
+        "FINNIFTY": 23000,
+        "MIDCPNIFTY": 13500,
+        "SENSEX": 80000,
+        "BANKEX": 23000
     }
+    return atm_map.get(index, 20000)
 
 
 @app.get("/api/quote")
@@ -456,7 +559,13 @@ async def get_quote(symbol: str):
         logger.error(f"❌ Failed to fetch quote: {str(e)}")
     
     return {"success": False, "message": "Failed to fetch quote"}
-
+# Mount frontend BEFORE any other routes
+frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
+if os.path.exists(frontend_path):
+    logger.info(f"✅ Frontend mounted from: {frontend_path}")
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+else:
+    logger.error(f"❌ Frontend path not found: {frontend_path}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -8,25 +8,27 @@ class TradingDashboard {
     }
 
     init() {
-    if (this.isInitialized) return;
-    
-    console.log('Initializing TradingDashboard...');
-    this.setupEventListeners();
-    this.setupDropdownListeners();
-    
-    // Load expiries first, then option chain
-    this.loadExpiries().then(() => {
-        this.loadOptionChain();
-    });
-    
-    this.loadPortfolio();
-    
-    // Set up intervals for auto-refresh
-    setInterval(() => this.loadOptionChain(), 1000);
-    setInterval(() => this.loadPortfolio(), 2000);
-    
-    this.isInitialized = true;
-}
+        if (this.isInitialized) return;
+        
+        console.log('Initializing TradingDashboard...');
+        this.setupEventListeners();
+        this.setupDropdownListeners();
+        
+        // Load expiries first, then option chain (ONLY ONCE, not in interval)
+        this.loadExpiries().then(() => {
+            this.loadOptionChain();
+        });
+        
+        this.loadPortfolio();
+        
+        // REDUCED intervals - every 5 seconds instead of 1-2 seconds
+        // Remove if you don't need auto-refresh
+        // setInterval(() => this.loadOptionChain(), 5000);
+        // setInterval(() => this.loadPortfolio(), 5000);
+        
+        this.isInitialized = true;
+    }
+
     setupEventListeners() {
         // Toggle mode button
         const toggleBtn = document.getElementById('toggleMode');
@@ -50,7 +52,6 @@ class TradingDashboard {
         this.setupLoginListeners();
     }
 
-    // NEW: Dropdown functionality
     setupDropdownListeners() {
         // Market type change
         document.getElementById('marketType').addEventListener('change', (e) => {
@@ -104,46 +105,46 @@ class TradingDashboard {
     }
 
     async loadExpiries() {
-    const market = document.getElementById('marketType').value;
-    const expirySelect = document.getElementById('expirySelect');
-    
-    try {
-        const response = await fetch(`/api/expiries?market=${market}`);
-        const data = await response.json();
+        const market = document.getElementById('marketType').value;
+        const expirySelect = document.getElementById('expirySelect');
         
-        if (data.success || data.expiries) {
-            if (data.expiries && data.expiries.length > 0) {
-                expirySelect.innerHTML = data.expiries.map(expiry => 
-                    `<option value="${expiry}">${expiry}</option>`
-                ).join('');
+        try {
+            const response = await fetch(`/api/expiries?market=${market}`);
+            const data = await response.json();
+            
+            if (data.success || data.expiries) {
+                if (data.expiries && data.expiries.length > 0) {
+                    expirySelect.innerHTML = data.expiries.map(expiry => 
+                        `<option value="${expiry}">${expiry}</option>`
+                    ).join('');
+                } else {
+                    this.setDefaultExpiries();
+                }
             } else {
-                // Fallback if no expiries returned
                 this.setDefaultExpiries();
             }
-        } else {
+        } catch (error) {
+            console.error('Failed to load expiries:', error);
             this.setDefaultExpiries();
         }
-    } catch (error) {
-        console.error('Failed to load expiries:', error);
-        this.setDefaultExpiries();
     }
-}
 
-setDefaultExpiries() {
-    const expirySelect = document.getElementById('expirySelect');
-    const defaultExpiries = [
-        '25-Jan-2024',
-        '01-Feb-2024', 
-        '08-Feb-2024',
-        '15-Feb-2024',
-        '22-Feb-2024',
-        '29-Feb-2024'
-    ];
-    
-    expirySelect.innerHTML = defaultExpiries.map(expiry => 
-        `<option value="${expiry}">${expiry}</option>`
-    ).join('');
-}
+    setDefaultExpiries() {
+        const expirySelect = document.getElementById('expirySelect');
+        const defaultExpiries = [
+            '25-Jan-2024',
+            '01-Feb-2024', 
+            '08-Feb-2024',
+            '15-Feb-2024',
+            '22-Feb-2024',
+            '29-Feb-2024'
+        ];
+        
+        expirySelect.innerHTML = defaultExpiries.map(expiry => 
+            `<option value="${expiry}">${expiry}</option>`
+        ).join('');
+    }
+
     async loadOptionChain() {
         const market = document.getElementById('marketType').value;
         const index = document.getElementById('indexSelect').value;
@@ -157,7 +158,6 @@ setDefaultExpiries() {
             if (data.success) {
                 this.displayOptionChain(data.data);
             } else {
-                // Fallback to mock data
                 const mockData = this.generateMockOptionChain();
                 this.displayOptionChain(mockData);
             }
@@ -169,55 +169,110 @@ setDefaultExpiries() {
     }
 
     setupLoginListeners() {
-        document.getElementById('hideLoginBtn').addEventListener('click', () => {
-            document.querySelector('.login-section').style.display = 'none';
-        });
-
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            this.kotakLogin();
-        });
-
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            this.kotakLogout();
-        });
-    }
-
-    async kotakLogin() {
-        const totp = document.getElementById('totpInput').value;
-        const mpin = document.getElementById('mpinInput').value;
-        const status = document.getElementById('loginStatus');
-
-        if (!totp || !mpin) {
-            status.innerHTML = '❌ Please enter both TOTP and MPIN';
-            status.style.color = '#e74c3c';
-            return;
+        const hideLoginBtn = document.getElementById('hideLoginBtn');
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        
+        if (hideLoginBtn) {
+            hideLoginBtn.addEventListener('click', () => {
+                document.querySelector('.login-section').style.display = 'none';
+            });
         }
 
-        status.innerHTML = '🔄 Logging in...';
-        status.style.color = '#f39c12';
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                this.kotakLogin();
+            });
+        }
 
-        try {
-            // Simple test - always succeed for now
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            status.innerHTML = '✅ Login Successful (Demo Mode)';
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                this.kotakLogout();
+            });
+        }
+    }
+    async kotakLogin() {
+    const totp = document.getElementById('totpInput').value;  // This is now 6-digit code
+    const mpin = document.getElementById('mpinInput').value;
+    const status = document.getElementById('loginStatus');
+
+    if (!totp || !mpin) {
+        status.innerHTML = '❌ Please enter both TOTP and MPIN';
+        status.style.color = '#e74c3c';
+        return;
+    }
+
+    if (totp.length !== 6 || isNaN(totp)) {
+        status.innerHTML = '❌ TOTP must be 6 digits';
+        status.style.color = '#e74c3c';
+        return;
+    }
+
+    if (mpin.length !== 6 || isNaN(mpin)) {
+        status.innerHTML = '❌ MPIN must be 6 digits';
+        status.style.color = '#e74c3c';
+        return;
+    }
+
+    status.innerHTML = '🔄 Logging in...';
+    status.style.color = '#f39c12';
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: `totp_secret=${encodeURIComponent(totp)}&mpin=${encodeURIComponent(mpin)}`
+        });
+        
+        const data = await response.json();
+        console.log('Login response:', data);
+        
+        if (data.status === 'success' && data.authenticated) {
+            status.innerHTML = '✅ Login Successful (Live Mode)';
             status.style.color = '#27ae60';
             this.showLoggedInState();
             document.getElementById('totpInput').value = '';
             document.getElementById('mpinInput').value = '';
             
-        } catch (error) {
-            status.innerHTML = '❌ Login failed';
+            // START AUTO-REFRESH
+            this.autoRefreshInterval = setInterval(() => {
+                this.loadOptionChain();
+            }, 1000);
+            
+            this.portfolioRefreshInterval = setInterval(() => {
+                this.loadPortfolio();
+            }, 2000);
+            
+        } else {
+            status.innerHTML = `❌ Login failed: ${data.message || 'Unknown error'}`;
             status.style.color = '#e74c3c';
         }
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        status.innerHTML = '❌ Login failed: ' + error.message;
+        status.style.color = '#e74c3c';
     }
+}
 
+    
     kotakLogout() {
-        this.showLoggedOutState();
-        document.getElementById('loginStatus').innerHTML = '💡 Enter TOTP + MPIN';
-        document.getElementById('loginStatus').style.color = '#7f8c8d';
+    // Stop auto-refresh intervals
+    if (this.autoRefreshInterval) {
+        clearInterval(this.autoRefreshInterval);
     }
+    if (this.portfolioRefreshInterval) {
+        clearInterval(this.portfolioRefreshInterval);
+    }
+    
+    this.showLoggedOutState();
+    document.getElementById('loginStatus').innerHTML = '💡 Enter TOTP + MPIN';
+    document.getElementById('loginStatus').style.color = '#7f8c8d';
+}
 
+   
     showLoggedInState() {
         document.getElementById('logoutSection').style.display = 'block';
         document.getElementById('kotakStatus').textContent = '(Live Mode)';
@@ -305,18 +360,15 @@ setDefaultExpiries() {
         if (this.oneClickMode) {
             this.placeConfirmedOrder(orderDetails);
         } else {
-            // Show the editable order entry window instead of simple confirmation
-            showOrderEntryWindow(orderDetails);
+            this.showOrderConfirmation(orderDetails);
         }
     }
 
     showOrderConfirmation(order) {
-        // Ensure no existing modal is present
         this.closeAllOrderModals();
         
         this.pendingOrder = order;
         
-        // Create a centered modal for order confirmation
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop';
         modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;';
@@ -338,7 +390,6 @@ setDefaultExpiries() {
             </div>
         `;
         
-        // Add event listeners to the buttons
         modal.querySelector('.cancel-order-btn').addEventListener('click', () => {
             this.closeOrderModal(modal);
         });
@@ -353,7 +404,9 @@ setDefaultExpiries() {
     closeAllOrderModals() {
         const modals = document.querySelectorAll('.modal-backdrop');
         modals.forEach(modal => {
-            document.body.removeChild(modal);
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
         });
         this.pendingOrder = null;
     }
@@ -373,7 +426,6 @@ setDefaultExpiries() {
             await new Promise(resolve => setTimeout(resolve, 1000));
             alert(`✅ Order placed!\n${orderToPlace.symbol} ${orderToPlace.action} ${orderToPlace.quantity} @ ${orderToPlace.price}`);
             
-            // Close the modal
             this.closeAllOrderModals();
             this.pendingOrder = null;
             this.loadPortfolio();
@@ -412,7 +464,11 @@ setDefaultExpiries() {
     }
 }
 
+// Initialize ONLY ONCE when DOM is loaded
 let dashboard;
-document.addEventListener('DOMContentLoaded', () => {
-    dashboard = new TradingDashboard();
-});
+if (!window.dashboardInitialized) {
+    document.addEventListener('DOMContentLoaded', () => {
+        dashboard = new TradingDashboard();
+        window.dashboardInitialized = true;
+    });
+}
