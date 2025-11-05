@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import uvicorn
 import sys
 import os
@@ -65,9 +66,14 @@ except Exception as e:
 # 1. DEFINE ALL API ROUTES FIRST (THIS IS CRITICAL FOR ROUTE PRIORITY)
 # =============================================================================
 
+# Root route - serve the frontend index.html
 @app.get("/")
-async def root():
-    return {"message": "Kotak Neo Trading API - Development Mode"}
+async def serve_frontend():
+    frontend_path = os.path.join(os.path.dirname(current_dir), "frontend", "index.html")
+    if os.path.exists(frontend_path):
+        return FileResponse(frontend_path)
+    else:
+        return {"message": "Kotak Neo Trading API - Frontend not found"}
 
 @app.get("/api/kotak/status")
 async def kotak_status():
@@ -292,14 +298,29 @@ async def get_margins():
     return {"margins": sample_margins, "message": "Development mode"}
 
 # =============================================================================
-# 2. MOUNT STATIC FILES LAST (as fallback for frontend routes)
+# 2. MOUNT STATIC FILES FOR OTHER FRONTEND ASSETS (CSS, JS, etc.)
 # =============================================================================
 
 # Fix the path to frontend - use absolute path
 frontend_path = os.path.join(os.path.dirname(current_dir), "frontend")
 if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-    print(f"✅ Frontend mounted from: {frontend_path}")
+    # Mount static files for CSS, JS, etc. but not for the root HTML
+    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+    print(f"✅ Static files mounted from: {frontend_path}")
+    
+    # Also create a catch-all route for frontend routes (SPA support)
+    @app.get("/{full_path:path}")
+    async def catch_all(full_path: str):
+        # Don't interfere with API routes
+        if full_path.startswith('api/'):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        # Serve index.html for all other frontend routes (SPA)
+        index_path = os.path.join(frontend_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        else:
+            return {"error": "Frontend not found"}
 else:
     print(f"⚠️ Frontend directory not found at {frontend_path}")
 
