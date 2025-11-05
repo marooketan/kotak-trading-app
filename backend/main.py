@@ -1,340 +1,250 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-import uvicorn
-import sys
+# main.py
 import os
-from typing import Optional
-
-# Add the current directory to Python path to import local modules
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
-
-app = FastAPI(title="Kotak Trading API")
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+import json
+import logging
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
+import pyotp
+import requests
+from datetime import datetime
 
 # Import your configuration
-try:
-    import config
-    print("✅ Configuration loaded successfully")
-    
-    # Extract credentials from your config structure
-    KOTAK_CONFIG = getattr(config, 'KOTAK_CONFIG', {})
-    API_KEY = KOTAK_CONFIG.get("access_token", "default_access_token")
-    CONSUMER_SECRET = KOTAK_CONFIG.get("neo_fin_key", "default_consumer_secret") 
-    USER_ID = KOTAK_CONFIG.get("client_code", "default_user_id")
-    
-    # For KotakAPI class, we need ACCESS_TOKEN as well
-    ACCESS_TOKEN = KOTAK_CONFIG.get("access_token", "default_access_token")
-    
-    print(f"📋 Config loaded for user: {USER_ID}")
-    
-except ImportError as e:
-    print(f"❌ Error loading config: {e}")
-    # Fallback configuration
-    API_KEY = "default_api_key"
-    CONSUMER_SECRET = "default_consumer_secret"
-    ACCESS_TOKEN = "default_access_token" 
-    USER_ID = "default_user_id"
+from config import KOTAK_CONFIG, KOTAK_API_BASE_URL, KOTAK_API_ENDPOINTS, get_static_expiries
 
-# Initialize API client only if kotak_api exists
-kotak_api = None
-try:
-    from kotak_api import KotakAPI
-    kotak_api = KotakAPI(
-        api_key=API_KEY,
-        consumer_secret=CONSUMER_SECRET,
-        access_token=ACCESS_TOKEN,
-        user_id=USER_ID
-    )
-    print("✅ KotakAPI initialized successfully")
-except ImportError as e:
-    print(f"⚠️ KotakAPI not available: {e}")
-except Exception as e:
-    print(f"⚠️ KotakAPI initialization failed: {e}")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# =============================================================================
-# 1. DEFINE ALL API ROUTES FIRST (THIS IS CRITICAL FOR ROUTE PRIORITY)
-# =============================================================================
-
-# Root route - serve the frontend index.html
-@app.get("/")
-async def serve_frontend():
-    frontend_path = os.path.join(os.path.dirname(current_dir), "frontend", "index.html")
-    if os.path.exists(frontend_path):
-        return FileResponse(frontend_path)
-    else:
-        return {"message": "Kotak Neo Trading API - Frontend not found"}
-
-@app.get("/api/kotak/status")
-async def kotak_status():
-    """Check if Kotak API is connected and working"""
-    if kotak_api is None:
-        return {
-            "status": "development",
-            "message": "Kotak API not configured - running in development mode",
-            "config": {
-                "user_id": USER_ID,
-                "has_access_token": bool(ACCESS_TOKEN and ACCESS_TOKEN != "default_access_token")
+class KotakAPI:
+    """Kotak Securities API wrapper for authentication and trading"""
+    
+    def __init__(self, access_token, mobile_number, client_code, neo_fin_key="neotradeapi"):
+        """
+        Initialize Kotak API with correct parameters (NO api_key argument)
+        """
+        self.access_token = access_token
+        self.mobile_number = mobile_number
+        self.client_code = client_code
+        self.neo_fin_key = neo_fin_key
+        
+        # Session tokens (to be obtained after login)
+        self.session_token = None
+        self.session_sid = None
+        self.base_url = None
+        self.is_authenticated = False
+        
+        logger.info(f"✅ KotakAPI initialized for client: {client_code}")
+    
+    def login_with_totp(self, totp_secret):
+        """
+        Step 1: Login with TOTP to get view token and session SID
+        """
+        try:
+            totp = pyotp.TOTP(totp_secret)
+            totp_code = totp.now()
+            
+            headers = {
+                "Authorization": self.access_token,
+                "neo-fin-key": self.neo_fin_key,
+                "Content-Type": "application/json"
             }
-        }
-    
-    try:
-        response = kotak_api.get_limits()
-        return {
-            "status": "connected",
-            "message": "Kotak API is working",
-            "data": response
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Kotak API error: {str(e)}")
-
-@app.get("/api/expiries")
-async def get_expiries():
-    """Get available expiry dates"""
-    try:
-        # Use static expiries from config as fallback
-        if hasattr(config, 'get_static_expiries'):
-            expiries = config.get_static_expiries()
-            return {"expiries": expiries.get("NFO", [])}
-        else:
-            # Fallback static expiries
-            sample_expiries = ["26-Dec-2024", "02-Jan-2025", "09-Jan-2025", "16-Jan-2025"]
-            return {"expiries": sample_expiries}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/option-chain")
-async def get_option_chain(symbol: str = "NIFTY", expiry: str = None):
-    """Get option chain data"""
-    try:
-        # Use your config's default values
-        default_symbol = getattr(config, 'DEFAULT_INDEX', 'NIFTY')
-        symbol = symbol or default_symbol
-        
-        # Return enhanced sample option chain data
-        spot_price = 21500.50
-        strike_count = getattr(config, 'DEFAULT_STRIKE_COUNT', 10)
-        
-        # Generate strikes around spot price
-        base_strike = int(spot_price / 100) * 100  # Round to nearest 100
-        strikes = [base_strike + (i * 100) for i in range(-strike_count//2, strike_count//2 + 1)]
-        
-        call_options = []
-        put_options = []
-        
-        for strike in strikes:
-            # Calculate realistic premiums based on distance from spot
-            distance = abs(strike - spot_price)
-            if strike <= spot_price:
-                call_premium = max(50, distance * 0.1)
-                put_premium = max(20, (spot_price - strike) * 0.8)
+            
+            payload = {
+                "mobileNumber": self.mobile_number,
+                "ucc": self.client_code,
+                "totp": totp_code
+            }
+            
+            response = requests.post(
+                KOTAK_API_ENDPOINTS["login"],
+                headers=headers,
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    logger.info("✅ TOTP Login successful")
+                    return data.get("data", {})
+                else:
+                    logger.error(f"❌ Login failed: {data.get('message')}")
+                    return None
             else:
-                call_premium = max(20, (strike - spot_price) * 0.8)
-                put_premium = max(50, distance * 0.1)
-            
-            call_options.append({
-                "strike": strike,
-                "oi": max(1000, 10000 - abs(strike - spot_price) * 10),
-                "volume": max(100, 1000 - abs(strike - spot_price)),
-                "premium": round(call_premium, 2),
-                "change": round(call_premium * 0.02, 2)
-            })
-            
-            put_options.append({
-                "strike": strike,
-                "oi": max(1000, 10000 - abs(strike - spot_price) * 10),
-                "volume": max(100, 1000 - abs(strike - spot_price)),
-                "premium": round(put_premium, 2),
-                "change": round(put_premium * 0.02, 2)
-            })
-        
-        sample_data = {
-            "symbol": symbol,
-            "expiry": expiry or "26-Dec-2024",
-            "timestamp": "2024-12-19 10:00:00",
-            "spot_price": spot_price,
-            "underlying": f"{symbol} INDEX",
-            "call_options": call_options,
-            "put_options": put_options
-        }
-        return sample_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/market/indices")
-async def get_market_indices():
-    """Get available market indices from config"""
-    try:
-        if hasattr(config, 'MARKET_INDICES'):
-            return {"indices": config.MARKET_INDICES}
-        else:
-            return {
-                "indices": {
-                    "NFO": ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"],
-                    "BFO": ["SENSEX", "BANKEX"]
-                }
+                logger.error(f"❌ Login error: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ TOTP Login exception: {str(e)}")
+            return None
+    
+    def validate_mpin(self, view_token, view_sid, mpin):
+        """
+        Step 2: Validate MPIN to get session token and trade token
+        """
+        try:
+            headers = {
+                "Authorization": self.access_token,
+                "neo-fin-key": self.neo_fin_key,
+                "sid": view_sid,
+                "Auth": view_token,
+                "Content-Type": "application/json"
             }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Basic API routes that work without Kotak API
-@app.get("/api/instruments")
-async def get_instruments(exchange: str = "NSE", segment: str = "EQ"):
-    """Get available instruments"""
-    if kotak_api is None:
+            
+            payload = {
+                "mpin": mpin
+            }
+            
+            response = requests.post(
+                KOTAK_API_ENDPOINTS["validate"],
+                headers=headers,
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    response_data = data.get("data", {})
+                    self.session_token = response_data.get("token")
+                    self.session_sid = response_data.get("sid")
+                    self.base_url = response_data.get("baseUrl")
+                    self.is_authenticated = True
+                    
+                    logger.info("✅ MPIN validation successful")
+                    logger.info(f"📋 Session established. Base URL: {self.base_url}")
+                    return response_data
+                else:
+                    logger.error(f"❌ MPIN validation failed: {data.get('message')}")
+                    return None
+            else:
+                logger.error(f"❌ MPIN validation error: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ MPIN validation exception: {str(e)}")
+            return None
+    
+    def get_headers(self):
+        """Get standard headers for authenticated API requests"""
         return {
-            "instruments": [
-                {"symbol": "RELIANCE", "token": "12345", "lot_size": 1},
-                {"symbol": "TCS", "token": "12346", "lot_size": 1},
-                {"symbol": "INFY", "token": "12347", "lot_size": 1}
-            ],
-            "message": "Running in development mode"
+            "Authorization": self.access_token,
+            "Auth": self.session_token,
+            "Sid": self.session_sid,
+            "neo-fin-key": self.neo_fin_key,
+            "Content-Type": "application/json"
         }
     
-    try:
-        instruments = kotak_api.instrument_master(exchange, segment)
-        return {"instruments": instruments}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    def check_authentication(self):
+        """Check if the API is authenticated"""
+        return self.is_authenticated
 
-@app.get("/api/limits")
-async def get_limits():
-    """Get trading limits"""
-    if kotak_api is None:
-        return {
-            "limits": {
-                "available_cash": 150000,
-                "utilized_margin": 25000,
-                "available_margin": 125000
-            },
-            "message": "Running in development mode"
-        }
+
+# Global API instance
+kotak_api = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    # Startup
+    global kotak_api
     
-    try:
-        limits = kotak_api.get_limits()
-        return {"limits": limits}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("✅ Configuration loaded successfully")
+    logger.info(f"📋 Config loaded for user: {KOTAK_CONFIG['client_code']}")
+    
+    # Initialize KotakAPI with correct parameters
+    kotak_api = KotakAPI(
+        access_token=KOTAK_CONFIG["access_token"],
+        mobile_number=KOTAK_CONFIG["mobile_number"],
+        client_code=KOTAK_CONFIG["client_code"],
+        neo_fin_key=KOTAK_CONFIG.get("neo_fin_key", "neotradeapi")
+    )
+    logger.info("✅ KotakAPI initialized successfully")
+    
+    yield
+    # Shutdown
+    logger.info("🛑 Shutting down Kotak Trading API Server...")
 
-# Development mode routes - return sample data
-@app.get("/api/orders")
-async def get_orders():
-    """Get order book - development version"""
-    sample_orders = [
-        {
-            "order_id": "12345", 
-            "symbol": "NIFTY25DEC21400CE", 
-            "quantity": 50, 
-            "status": "COMPLETED",
-            "transaction_type": "BUY",
-            "price": 150.25
-        },
-        {
-            "order_id": "12346", 
-            "symbol": "BANKNIFTY25DEC48000PE", 
-            "quantity": 25, 
-            "status": "PENDING",
-            "transaction_type": "SELL", 
-            "price": 85.50
-        }
-    ]
-    return {"orders": sample_orders, "message": "Development mode"}
 
-@app.get("/api/positions")
-async def get_positions():
-    """Get current positions - development version"""
-    sample_positions = [
-        {
-            "symbol": "NIFTY25DEC21400CE",
-            "quantity": 50,
-            "average_price": 150.25,
-            "current_price": 145.75,
-            "pnl": -225.0
-        },
-        {
-            "symbol": "BANKNIFTY25DEC48000PE", 
-            "quantity": 25,
-            "average_price": 85.50,
-            "current_price": 92.25, 
-            "pnl": 168.75
-        }
-    ]
-    return {"positions": sample_positions, "message": "Development mode"}
+app = FastAPI(
+    title="Kotak Trading API",
+    description="Kotak Securities Trading API Wrapper",
+    lifespan=lifespan
+)
 
-@app.get("/api/holdings")
-async def get_holdings():
-    """Get portfolio holdings - development version"""
-    sample_holdings = [
-        {"symbol": "RELIANCE", "quantity": 25, "average_price": 2420.25, "current_price": 2450.50},
-        {"symbol": "INFY", "quantity": 15, "average_price": 1650.50, "current_price": 1675.25}
-    ]
-    return {"holdings": sample_holdings, "message": "Development mode"}
-
-@app.get("/api/margins")
-async def get_margins():
-    """Get margin information - development version"""
-    sample_margins = {
-        "equity": {
-            "available": 150000, 
-            "utilized": 25000,
-            "available_for_trading": 125000
-        },
-        "derivatives": {
-            "available": 200000,
-            "utilized": 75000, 
-            "available_for_trading": 125000
-        }
-    }
-    return {"margins": sample_margins, "message": "Development mode"}
-
-# =============================================================================
-# 2. MOUNT STATIC FILES FOR OTHER FRONTEND ASSETS (CSS, JS, etc.)
-# =============================================================================
-
-# Fix the path to frontend - use absolute path
-frontend_path = os.path.join(os.path.dirname(current_dir), "frontend")
+# Mount frontend BEFORE any other routes
+frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
-    # Mount static files for CSS, JS, etc. but not for the root HTML
-    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-    print(f"✅ Static files mounted from: {frontend_path}")
-    
-    # Also create a catch-all route for frontend routes (SPA support)
-    @app.get("/{full_path:path}")
-    async def catch_all(full_path: str):
-        # Don't interfere with API routes
-        if full_path.startswith('api/'):
-            raise HTTPException(status_code=404, detail="API endpoint not found")
-        
-        # Serve index.html for all other frontend routes (SPA)
-        index_path = os.path.join(frontend_path, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        else:
-            return {"error": "Frontend not found"}
+    logger.info(f"✅ Frontend mounted from: {frontend_path}")
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 else:
-    print(f"⚠️ Frontend directory not found at {frontend_path}")
+    logger.error(f"❌ Frontend path not found: {frontend_path}")
+
+
+# API Routes (define BEFORE mounting static files if possible)
+@app.get("/api/status")
+async def get_status():
+    """Check API status and authentication"""
+    global kotak_api
+    
+    return {
+        "status": "running",
+        "authenticated": kotak_api.check_authentication() if kotak_api else False,
+        "user": KOTAK_CONFIG.get("client_code"),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/config")
+async def get_config():
+    """Get configuration (without sensitive data)"""
+    return {
+        "user": KOTAK_CONFIG.get("client_code"),
+        "mobile": KOTAK_CONFIG.get("mobile_number", "****"),
+        "api_base_url": KOTAK_API_BASE_URL,
+        "expiries": get_static_expiries()
+    }
+
+
+@app.post("/api/login")
+async def login(totp_secret: str, mpin: str):
+    """
+    Login endpoint for authentication
+    """
+    global kotak_api
+    
+    if not kotak_api:
+        return {"status": "error", "message": "API not initialized"}
+    
+    # Step 1: Login with TOTP
+    view_data = kotak_api.login_with_totp(totp_secret)
+    if not view_data:
+        return {"status": "error", "message": "TOTP login failed"}
+    
+    # Step 2: Validate MPIN
+    session_data = kotak_api.validate_mpin(
+        view_data.get("token"),
+        view_data.get("sid"),
+        mpin
+    )
+    
+    if session_data:
+        return {
+            "status": "success",
+            "message": "Authentication successful",
+            "user": KOTAK_CONFIG.get("client_code")
+        }
+    else:
+        return {"status": "error", "message": "MPIN validation failed"}
+
 
 if __name__ == "__main__":
-    print("🚀 Starting Kotak Trading API Server...")
-    print(f"📋 User ID: {USER_ID}")
-    print("📊 Development mode - using sample data")
-    print("🌐 Server running at: http://localhost:8000")
-    print("📚 API documentation at: http://localhost:8000/docs")
-    print("💡 Add your real Kotak API credentials in config.py for live data")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    import uvicorn
+    
+    logger.info("🚀 Starting Kotak Trading API Server...")
+    logger.info(f"📊 Development mode - using static data fallback")
+    logger.info(f"🌐 Server running at: http://localhost:8000")
+    logger.info(f"📚 API documentation at: http://localhost:8000/docs")
+    logger.info(f"💡 Add your real Kotak API credentials in config.py for live data")
+    
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
