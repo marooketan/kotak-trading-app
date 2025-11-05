@@ -1,0 +1,141 @@
+<!-- Portfolio P&L Window -->
+<div id="portfolioWindow" class="draggable-window" style="display: none; position: fixed; top: 50px; left: 50px; width: 450px; height: 500px;">
+    <div class="window-header">
+        <h3>📊 Portfolio P&L</h3>
+        <div class="window-controls">
+            <button class="minimize-btn">−</button>
+            <button class="close-btn">×</button>
+        </div>
+    </div>
+    <div class="window-body">
+        <div class="portfolio-summary">
+            <div class="summary-item">
+                <span>Total Investment</span>
+                <span id="totalInvestment">₹1,00,000.00</span>
+            </div>
+            <div class="summary-item">
+                <span>Current Value</span>
+                <span id="currentValue">₹1,15,000.00</span>
+            </div>
+            <div class="summary-item pnl" id="totalPnl">
+                <span>Total P&L</span>
+                <span>+₹15,000.00</span>
+            </div>
+            <div class="summary-item pnl" id="todaysPnl">
+                <span>Today's P&L</span>
+                <span>+₹2,500.00</span>
+            </div>
+        </div>
+        
+        <h4>Holdings</h4>
+        <div class="holdings-list" id="holdingsList">
+            <!-- Holdings will be populated by JavaScript -->
+        </div>
+    </div>
+    <div class="resize-handle"></div>
+</div>
+
+<!-- Order History Window -->
+<div id="orderHistoryWindow" class="draggable-window" style="display: none; position: fixed; top: 50px; left: 550px; width: 450px; height: 500px;">
+    <div class="window-header">
+        <h3>📋 Order History</h3>
+        <div class="window-controls">
+            <button class="minimize-btn">−</button>
+            <button class="close-btn">×</button>
+        </div>
+    </div>
+    <div class="window-body">
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">All</button>
+            <button class="filter-tab" data-filter="completed">Completed</button>
+            <button class="filter-tab" data-filter="pending">Pending</button>
+            <button class="filter-tab" data-filter="cancelled">Cancelled</button>
+        </div>
+        
+        <div class="orders-list" id="ordersList">
+            <!-- Orders will be populated by JavaScript -->
+        </div>
+    </div>
+    <div class="resize-handle"></div>
+</div>
+<!-- Order Entry Window (for one-click OFF mode) -->
+<div id="orderEntryWindow" class="draggable-window" style="display: none; position: fixed; top: 100px; left: 300px; width: 400px; height: 450px;">
+    <div class="window-header">
+        <h3>📝 Place Order</h3>
+        <div class="window-controls">
+            <button class="minimize-btn">−</button>
+            <button class="close-btn">×</button>
+        </div>
+    </div>
+    <div class="window-body">
+        <div class="order-form">
+            <div class="form-group">
+                <label>Symbol</label>
+                <input type="text" id="orderSymbol" readonly class="form-input">
+            </div>
+            
+            <div class="form-group">
+                <label>Action</label>
+                <div class="action-buttons">
+                    <button id="actionBuy" class="action-btn buy-active">BUY</button>
+                    <button id="actionSell" class="action-btn">SELL</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Strike Price</label>
+                <input type="text" id="orderStrike" readonly class="form-input">
+            </div>
+            
+            <div class="form-group">
+                <label>Option Type</label>
+                <input type="text" id="orderOptionType" readonly class="form-input">
+            </div>
+            
+            <div class="form-group">
+                <label>Quantity (Lots)</label>
+                <input type="number" id="orderQty" value="1" min="1" max="100" class="form-input">
+                <div class="qty-help">1 lot = 50 units</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Order Type</label>
+                <select id="orderTypeSelect" class="form-select">
+                    <option value="NRML">NRML</option>
+                    <option value="MIS">MIS</option>
+                    <option value="CNC">CNC</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Price Type</label>
+                <select id="priceTypeSelect" class="form-select">
+                    <option value="MARKET">MARKET</option>
+                    <option value="LIMIT">LIMIT</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="limitPriceGroup" style="display: none;">
+                <label>Limit Price</label>
+                <input type="number" id="limitPrice" step="0.05" class="form-input" placeholder="Enter price">
+            </div>
+            
+            <div class="order-summary">
+                <div class="summary-row">
+                    <span>Total Quantity:</span>
+                    <span id="totalQty">50</span>
+                </div>
+                <div class="summary-row">
+                    <span>Estimated Amount:</span>
+                    <span id="estimatedAmount">₹0.00</span>
+                </div>
+            </div>
+            
+            <div class="form-buttons">
+                <button id="cancelOrderBtn" class="btn-secondary">Cancel</button>
+                <button id="submitOrderBtn" class="btn-primary">Place Order</button>
+            </div>
+        </div>
+    </div>
+    <div class="resize-handle"></div>
+</div>
