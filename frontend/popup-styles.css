@@ -1,0 +1,374 @@
+/* Draggable Windows */
+.draggable-window {
+    display: none;
+    position: fixed;
+    width: 450px;
+    height: 500px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    border: 1px solid #ddd;
+    z-index: 1000;
+    resize: both;
+    overflow: hidden;
+    min-width: 350px;
+    min-height: 300px;
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+.window-header {
+    background: #2c3e50;
+    color: white;
+    padding: 12px 15px;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    border-radius: 8px 8px 0 0;
+}
+
+.window-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.window-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.window-controls button {
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.minimize-btn {
+    background: #f39c12;
+    color: white;
+}
+
+.close-btn {
+    background: #e74c3c;
+    color: white;
+}
+
+.window-body {
+    padding: 15px;
+    height: calc(100% - 50px);
+    overflow-y: auto;
+}
+
+.resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 15px;
+    height: 15px;
+    cursor: nw-resize;
+    background: linear-gradient(135deg, transparent 50%, #95a5a6 50%);
+}
+
+/* Portfolio Styles */
+.portfolio-summary {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.summary-item:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.summary-item.pnl.positive span:last-child {
+    color: #27ae60;
+    font-weight: bold;
+}
+
+.summary-item.pnl.negative span:last-child {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.holdings-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.holding-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    margin-bottom: 5px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border-left: 4px solid #3498db;
+}
+
+.stock-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stock-pnl {
+    text-align: right;
+}
+
+.positive {
+    color: #27ae60;
+}
+
+.negative {
+    color: #e74c3c;
+}
+
+/* Order History Styles */
+.filter-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.filter-tab {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.filter-tab.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.orders-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.order-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #95a5a6;
+}
+
+.order-item.completed {
+    border-left-color: #27ae60;
+}
+
+.order-item.pending {
+    border-left-color: #f39c12;
+}
+
+.order-item.cancelled {
+    border-left-color: #e74c3c;
+}
+
+.order-symbol {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.order-details {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.order-status {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.status-completed {
+    background: #d5f4e6;
+    color: #27ae60;
+}
+
+.status-pending {
+    background: #fdebd0;
+    color: #f39c12;
+}
+
+.status-cancelled {
+    background: #fadbd8;
+    color: #e74c3c;
+}
+
+/* Modal Backdrop */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .draggable-window {
+        width: 95vw;
+        height: 70vh;
+    }
+}
+
+/* Order Form Styles */
+.order-form {
+    padding: 10px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.form-input, .form-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid #bdc3c7;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-input:focus, .form-select:focus {
+    border-color: #3498db;
+    outline: none;
+}
+
+.form-input[readonly] {
+    background-color: #f8f9fa;
+    color: #7f8c8d;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #bdc3c7;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.action-btn.buy-active {
+    background: #27ae60;
+    color: white;
+    border-color: #27ae60;
+}
+
+.action-btn.sell-active {
+    background: #e74c3c;
+    color: white;
+    border-color: #e74c3c;
+}
+
+.qty-help {
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-top: 4px;
+}
+
+.order-summary {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 20px 0;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.summary-row:last-child {
+    margin-bottom: 0;
+    font-weight: bold;
+    border-top: 1px solid #ddd;
+    padding-top: 8px;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary {
+    flex: 1;
+    padding: 12px;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.btn-secondary {
+    flex: 1;
+    padding: 12px;
+    background: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-primary:hover {
+    background: #219a52;
+}
+
+.btn-secondary:hover {
+    background: #7f8c8d;
+}
+
+/* Price input animation */
+#limitPriceGroup {
+    transition: all 0.3s ease;
+}

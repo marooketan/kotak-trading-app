@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kotak Options Trader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="popup-styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Kotak Options Trader</h1>
+            <div class="controls">
+                <button id="toggleMode">One-Click: OFF</button>
+                
+                <!-- 4 Dropdowns -->
+                <div class="filter-group">
+                    <select id="marketType">
+                        <option value="NFO">NFO</option>
+                        <option value="BFO">BFO</option>
+                    </select>
+                    
+                    <select id="indexSelect">
+                        <option value="NIFTY">NIFTY</option>
+                        <option value="BANKNIFTY">BANKNIFTY</option>
+                        <option value="FINNIFTY">FINNIFTY</option>
+                        <option value="MIDCPNIFTY">MIDCPNIFTY</option>
+                    </select>
+                    
+                    <select id="expirySelect">
+                        <option value="">Loading expiries...</option>
+                    </select>
+                    
+                    <select id="strikeCount">
+                        <option value="10">10 Strikes</option>
+                        <option value="25" selected>25 Strikes</option>
+                        <option value="all">All Strikes</option>
+                    </select>
+                </div>
+                
+                <select id="productType">
+                    <option value="NRML">NRML</option>
+                    <option value="MIS">MIS</option>
+                    <option value="CNC">CNC</option>
+                </select>
+                
+                <input type="number" id="quantity" value="50" min="1">
+                <button id="refreshBtn">🔄 Refresh</button>
+                <button id="portfolioBtn" onclick="showPortfolioWindow()">📊 Portfolio</button>
+                <button id="orderHistoryBtn" onclick="showOrderHistoryWindow()">📋 Orders</button>
+            </div>
+        </header>
+
+        <!-- Login Section -->
+        <div class="login-section" style="background: #f8f9fa; padding: 15px; margin: 10px 20px; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #2c3e50;">🔐 Kotak Secure Login</h3>
+                <button id="hideLoginBtn" style="padding: 5px 10px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Hide</button>
+            </div>
+            
+            <div id="loginForm" style="margin-top: 15px;">
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="text" id="totpInput" placeholder="6-digit TOTP" 
+                           style="padding: 10px; border: 2px solid #bdc3c7; border-radius: 6px; width: 120px;" 
+                           maxlength="6">
+                    <input type="password" id="mpinInput" placeholder="6-digit MPIN" 
+                           style="padding: 10px; border: 2px solid #bdc3c7; border-radius: 6px; width: 120px;" 
+                           maxlength="6">
+                    <button id="loginBtn" style="padding: 10px 20px; background: #27ae60; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Login</button>
+                </div>
+                <div id="loginStatus" style="font-size: 14px; color: #7f8c8d; min-height: 20px;">
+                    💡 Enter TOTP from Authenticator + your MPIN
+                </div>
+            </div>
+
+            <div id="logoutSection" style="display: none; background: #e8f5e8; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                <span style="color: #27ae60; font-weight: bold;">✅ Connected to Kotak</span>
+                <button id="logoutBtn" style="margin-left: 15px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Logout</button>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="pnl-section">
+                <h3>Portfolio P&L <span id="kotakStatus" style="font-size: 14px; color: #e74c3c;">(Demo Mode)</span></h3>
+                <div id="pnlDisplay">Loading...</div>
+            </div>
+        </div>
+
+        <div class="option-chain">
+            <h2>NIFTY Option Chain</h2>
+            <div id="loading">Loading option chain...</div>
+            <table id="optionTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Strike</th>
+                        <th>Call Bid</th>
+                        <th>Call Ask</th>
+                        <th>Call LTP</th>
+                        <th>Buy/Sell CE</th>
+                        <th>Put Bid</th>
+                        <th>Put Ask</th>
+                        <th>Put LTP</th>
+                        <th>Buy/Sell PE</th>
+                    </tr>
+                </thead>
+                <tbody id="optionData">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="orders-section">
+            <h3>Open Orders</h3>
+            <div id="ordersDisplay">No open orders</div>
+        </div>
+    </div>
+
+    <!-- Popup windows container -->
+    <div id="popup-windows-container">
+        <!-- Populated by popup-windows.html -->
+    </div>
+
+    <script src="dashboard.js"></script>
+    <script src="popup-script.js"></script>
+    <script>
+        fetch('popup-windows.html')
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.text();
+            })
+            .then(html => {
+                document.getElementById('popup-windows-container').innerHTML = html;
+                console.log('Popup windows HTML loaded successfully');
+                
+                if (window.popupManager) {
+                    setTimeout(() => {
+                        window.popupManager.init();
+                    }, 100);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading popup windows:', error);
+                const container = document.getElementById('popup-windows-container');
+                container.innerHTML = '<div style="display:none">Popup windows failed to load</div>';
+            });
+    </script>
+</body>
+</html>
