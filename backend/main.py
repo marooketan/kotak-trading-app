@@ -7,7 +7,8 @@ import sqlite3
 import logging
 from typing import List, Dict
 import config
-from kotak_api import kotak_api  # NEW: Import Kotak API
+from kotak_api import kotak_api
+from real_kotak_api import real_kotak_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,41 +39,46 @@ async def kotak_validate(mpin: str):
     logger.info(f"🔐 MPIN validation: {mpin}")
     return {"success": True, "message": "MPIN validated"}
 
-# NEW: Kotak API Status Check
+# Real Kotak API Status Check
 @app.get("/api/kotak/status")
 async def kotak_status():
-    """Check if Kotak API connection is working"""
-    try:
-        # Test with expiries endpoint
-        test_expiries = kotak_api.get_expiries("NIFTY")
-        
+    """Check real Kotak API connection"""
+    status = real_kotak_api.test_connection()
+    return status
+
+# New endpoint for real quotes
+@app.get("/api/kotak/quotes/{symbol}")
+async def get_real_quotes(symbol: str):
+    """Get real quotes from Kotak API"""
+    result = real_kotak_api.get_quotes([symbol])
+    return result
+
+# Enhanced option chain endpoint
+@app.get("/api/real-option-chain/{index}")
+async def get_real_option_chain(index: str):
+    """Get real option chain from Kotak API"""
+    result = real_kotak_api.get_option_chain_quotes(index)
+    
+    if result["success"]:
         return {
-            "kotak_connected": len(test_expiries) > 0,
-            "expiries_received": len(test_expiries),
-            "message": "✅ Kotak API is working!" if test_expiries else "❌ Kotak API failed - using fallback data",
-            "source": "live" if test_expiries else "fallback"
+            "success": True,
+            "source": "kotak_live",
+            "index": index,
+            "data": result["data"]
         }
-    except Exception as e:
-        return {
-            "kotak_connected": False,
-            "error": str(e),
-            "message": "❌ Kotak API connection failed - using fallback data",
-            "source": "fallback"
-        }
+    else:
+        # Fallback to mock data
+        return await get_option_chain(index, 25, "NFO", None)
 
 # Enhanced endpoints with real Kotak API
 @app.get("/api/expiries")
 async def get_expiries(market: str = "NFO"):
-    """Get expiry dates - tries Kotak API first, then fallback"""
+    """Get expiry dates - tries real Kotak API first, then fallback"""
     logger.info(f"📅 Fetching expiries for market: {market}")
     
     try:
         # Try real Kotak API first
-        symbol = "NIFTY"  # Default symbol for NFO
-        if market == "BFO":
-            symbol = "SENSEX"
-            
-        real_expiries = kotak_api.get_expiries(symbol)
+        real_expiries = real_kotak_api.get_expiries(market)
         
         if real_expiries:
             logger.info(f"✅ Got {len(real_expiries)} real expiries from Kotak API")
@@ -125,7 +131,7 @@ async def get_option_chain(
     
     try:
         # Try real Kotak API first
-        real_data = kotak_api.get_option_chain(index, expiry or "", strikes)
+        real_data = real_kotak_api.get_option_chain_quotes(index)
         
         if real_data and real_data.get("success", False):
             logger.info(f"✅ Got real option chain data from Kotak for {index}")
@@ -166,7 +172,7 @@ async def get_option_chain_with_params(
     """Alternative endpoint with query parameters"""
     return await get_option_chain(index, strikes, market, expiry)
 
-# NEW: Real order placement
+# Real order placement
 @app.post("/api/orders/place")
 async def place_order(order_data: dict):
     """Place a real order through Kotak API"""
@@ -174,13 +180,13 @@ async def place_order(order_data: dict):
     
     try:
         # Try real Kotak API first
-        result = kotak_api.place_order(order_data)
+        result = real_kotak_api.place_order(order_data)
         
         if result and result.get("success", False):
             return {
                 "success": True,
                 "source": "kotak_live", 
-                "order_id": result.get("orderId", f"ORD{int(time.time())}"),
+                "order_id": result.get("order_id", f"ORD{int(time.time())}"),
                 "message": "Order placed successfully via Kotak API",
                 "order": order_data
             }
@@ -205,9 +211,9 @@ async def health_check():
     
     return {
         "status": "healthy", 
-        "kotak_connected": kotak_status["kotak_connected"],
-        "features": ["multi-market", "expiry-selection", "strike-selection", "kotak-api"],
-        "message": kotak_status["message"]
+        "kotak_connected": kotak_status.get("connected", False),
+        "features": ["multi-market", "expiry-selection", "strike-selection", "kotak-api", "dynamic-expiries"],
+        "message": kotak_status.get("message", "Unknown status")
     }
 
 # Portfolio and Orders endpoints (for popup windows)
@@ -320,7 +326,7 @@ def generate_mock_option_chain(index: str, strikes: int = 25):
     return chains
 
 print("🚀 Enhanced Kotak Server Running: http://localhost:8000")
-print("📊 New Features: Real Kotak API integration with fallbacks")
+print("📊 New Features: Real Kotak API integration with dynamic expiries")
 print("🔍 Check API status: http://localhost:8000/api/kotak/status")
 
 if __name__ == "__main__":
