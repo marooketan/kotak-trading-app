@@ -314,62 +314,49 @@ async def get_indices(market: str = "NFO"):
         "success": True,
         "indices": indices
     }
-
-
 @app.get("/api/expiries")
 async def get_expiries(market: str = "NFO"):
     """Fetch expiries from Kotak API with caching"""
     global kotak_api, cache
     
-    cache_key = f"expiries_{market}"
+    print(f"🔴 STEP 1: Starting expiries for market: {market}")
+    print(f"🔴 STEP 2: kotak_api exists: {kotak_api is not None}")
     
-    # Return cached data if valid
-    if is_cache_valid(cache_key) and cache_key in cache["expiries"]:
-        logger.info(f"📦 Returning cached expiries for {market}")
-        return {
-            "success": True,
-            "expiries": cache["expiries"][cache_key]
-        }
+    if kotak_api is None:
+        print("🔴 STEP 3: kotak_api is None - going to fallback")
+        nfo_expiries = ["06-Nov-2025", "13-Nov-2025", "20-Nov-2025", "27-Nov-2025", "04-Dec-2025"]
+        return {"success": True, "expiries": nfo_expiries}
     
-    if not kotak_api or not kotak_api.is_authenticated:
-        logger.warning("⚠️ Not authenticated, using fallback expiries")
-        expiries_data = get_static_expiries()
-        return {
-            "success": True,
-            "expiries": expiries_data.get(market, [])
-        }
+    print(f"🔴 STEP 4: is_authenticated: {kotak_api.is_authenticated}")
+    
+    if not kotak_api.is_authenticated:
+        print("🔴 STEP 5: Not authenticated - going to fallback")
+        nfo_expiries = ["06-Nov-2025", "13-Nov-2025", "20-Nov-2025", "27-Nov-2025", "04-Dec-2025"]
+        return {"success": True, "expiries": nfo_expiries}
+    
+    print("🔴 STEP 6: Trying Kotak API call")
     
     try:
         headers = kotak_api.get_headers()
-        
-        # Kotak API endpoint for expiries
-        url = f"{kotak_api.base_url}/instruments/expirylist?market={market}"
+        url = f"{kotak_api.base_url}/instruments/expiry?market={market}"
+        print(f"🔴 STEP 7: Calling Kotak API: {url}")
         
         response = requests.get(url, headers=headers, timeout=10)
+        print(f"🔴 STEP 8: Response status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            if data.get("status") == "success":
-                expiries = data.get("data", {}).get("expirylist", [])
-                
-                # Cache the result
-                cache["expiries"][cache_key] = expiries
-                cache["last_update"][cache_key] = time.time()
-                
-                logger.info(f"✅ Fetched {len(expiries)} expiries from Kotak for {market}")
-                return {"success": True, "expiries": expiries}
+            print(f"🔴 STEP 9: Response data: {data}")
+            return {"success": True, "expiries": data.get("data", {}).get("expirylist", [])}
+        else:
+            print(f"🔴 STEP 10: HTTP Error: {response.status_code}")
     
     except Exception as e:
-        logger.error(f"❌ Failed to fetch expiries: {str(e)}")
+        print(f"🔴 STEP 11: Exception: {e}")
     
-    # Fallback to static expiries
-    logger.warning(f"⚠️ Falling back to static expiries for {market}")
-    expiries_data = get_static_expiries()
-    return {
-        "success": True,
-        "expiries": expiries_data.get(market, [])
-    }
-
+    print("🔴 STEP 12: Final fallback")
+    nfo_expiries = ["06-Nov-2025", "13-Nov-2025", "20-Nov-2025", "27-Nov-2025", "04-Dec-2025"]
+    return {"success": True, "expiries": nfo_expiries}
 
 @app.get("/api/scrip-lookup")
 async def scrip_lookup(query: str):
@@ -514,7 +501,31 @@ async def get_option_chain(market: str, index: str, expiry: str, strikes: str = 
         logger.error(traceback.format_exc())
     
     return {"success": False, "message": "Failed to fetch option chain"}
+@app.get("/api/session-status")
+async def session_status():
+    """Check session status without requiring login"""
+    if kotak_api and hasattr(kotak_api, 'is_authenticated'):
+        return {
+            "authenticated": kotak_api.is_authenticated,
+            "has_session": hasattr(kotak_api, 'session_tokens') and kotak_api.session_tokens is not None,
+            "message": "Session exists but may need TOTP refresh"
+        }
+    else:
+        return {
+            "authenticated": False,
+            "has_session": False, 
+            "message": "No session - need full login"
+        }
 
+# Add this right after your existing routes like /api/expiries, /api/option-chain etc.
+@app.get("/api/debug/auth")
+async def debug_auth():
+    """Check authentication status"""
+    return {
+        "kotak_api_exists": kotak_api is not None,
+        "is_authenticated": kotak_api.is_authenticated if kotak_api else False,
+        "client_code": KOTAK_CONFIG.get("client_code", "unknown") if 'KOTAK_CONFIG' in locals() else "unknown"
+    }
 
 
 def get_atm_strike(index: str) -> int:
