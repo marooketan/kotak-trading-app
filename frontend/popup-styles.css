@@ -1,254 +1,241 @@
-/* Draggable Windows */
-.draggable-window {
-    display: none;
-    position: fixed;
-    width: 450px;
-    height: 500px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    border: 1px solid #ddd;
-    z-index: 1000;
-    resize: both;
-    overflow: hidden;
-    min-width: 350px;
-    min-height: 300px;
-    max-width: 90vw;
-    max-height: 90vh;
+:root {
+  /* Font Customization Variables */
+  --popup-font-size: 14px;
+  --popup-font-color: #2c3e50;
+  --popup-header-bg: #34495e;
+  --popup-header-color: white;
+  --popup-border-radius: 8px;
 }
 
+/* Apply CSS variables to all popup content */
+.popup-window,
+.popup-window .window-content,
+.popup-window .orders-table,
+.popup-window .orders-table th,
+.popup-window .orders-table td,
+.popup-window .filter-tabs,
+.popup-window .filter-tab,
+.popup-window .form-group,
+.popup-window .form-input,
+.popup-window .form-select,
+.popup-window .btn-primary,
+.popup-window .btn-secondary {
+    font-size: var(--popup-font-size);
+    color: var(--popup-font-color);
+}
+
+/* EXCLUDE form-buttons from the font-size variable to prevent layout issues */
+.popup-window .form-buttons {
+    font-size: 14px !important;
+}
+
+/* Apply header color specifically */
 .window-header {
-    background: #2c3e50;
-    color: white;
-    padding: 12px 15px;
-    cursor: move;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    user-select: none;
-    border-radius: 8px 8px 0 0;
+    background: var(--popup-header-bg) !important;
+    color: var(--popup-header-color) !important;
 }
 
-.window-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-}
-
-.window-controls {
-    display: flex;
-    gap: 5px;
-}
-
-.window-controls button {
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
+/* Order History Advanced Table Styles */
+.orders-table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 12px;
+}
+
+.orders-table th {
+    background: #34495e;
+    color: white !important; /* <--- THIS FIXES THE INVISIBLE TEXT */
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-right: 1px solid #2c3e50;
+    position: relative;
+    user-select: none;
+    cursor: move;
+    min-width: 80px;
+}
+
+.orders-table th:hover {
+    background: #2c3e50;
+}
+
+.orders-table th.dragging {
+    background: #e74c3c;
+    opacity: 0.8;
+}
+
+.orders-table th .resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: transparent;
+    cursor: col-resize;
+}
+
+.orders-table th .resize-handle:hover {
+    background: #3498db;
+}
+
+.orders-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid #ecf0f1;
+    vertical-align: middle;
+}
+
+.orders-table tr:hover td {
+    background: #f8f9fa;
+}
+
+/* Order Status Colors */
+.order-item.pending td {
+    background: #fffbf0 !important;
+}
+
+.order-item.completed td {
+    background: #f0fff4 !important;
+}
+
+.order-item.cancelled td {
+    background: #fff0f0 !important;
+}
+
+.order-item.pending:hover td {
+    background: #fff8e1 !important;
+}
+
+.order-item.completed:hover td {
+    background: #e8f5e8 !important;
+}
+
+.order-item.cancelled:hover td {
+    background: #ffeaea !important;
+}
+
+/* Action Buttons */
+.action-buttons {
     display: flex;
-    align-items: center;
+    gap: 4px;
     justify-content: center;
 }
 
-.minimize-btn {
-    background: #f39c12;
+.btn-modify, .btn-cancel {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.2s;
+}
+
+.btn-modify {
+    background: #3498db;
     color: white;
 }
 
-.close-btn {
+.btn-modify:hover {
+    background: #2980b9;
+}
+
+.btn-cancel {
     background: #e74c3c;
     color: white;
 }
 
-.window-body {
-    padding: 15px;
-    height: calc(100% - 50px);
-    overflow-y: auto;
+.btn-cancel:hover {
+    background: #c0392b;
 }
 
-.resize-handle {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 15px;
-    height: 15px;
-    cursor: nw-resize;
-    background: linear-gradient(135deg, transparent 50%, #95a5a6 50%);
-}
-
-/* Portfolio Styles */
-.portfolio-summary {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 6px;
-    margin-bottom: 15px;
-}
-
-.summary-item {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.summary-item:last-child {
-    margin-bottom: 0;
-    border-bottom: none;
-}
-
-.summary-item.pnl.positive span:last-child {
-    color: #27ae60;
-    font-weight: bold;
-}
-
-.summary-item.pnl.negative span:last-child {
-    color: #e74c3c;
-    font-weight: bold;
-}
-
-.holdings-list {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.holding-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px;
-    margin-bottom: 5px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    border-left: 4px solid #3498db;
-}
-
-.stock-info {
-    display: flex;
-    flex-direction: column;
-}
-
-.stock-pnl {
-    text-align: right;
-}
-
-.positive {
-    color: #27ae60;
-}
-
-.negative {
-    color: #e74c3c;
-}
-
-/* Order History Styles */
+/* Filter Tabs */
 .filter-tabs {
     display: flex;
-    gap: 5px;
+    gap: 2px;
+    background: #bdc3c7;
+    border-radius: 6px;
+    padding: 3px;
     margin-bottom: 15px;
+    position: relative;
+    align-items: center;
 }
 
 .filter-tab {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    background: white;
-    border-radius: 4px;
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    background: #ecf0f1;
+    color: #7f8c8d;
     cursor: pointer;
-    font-size: 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+    min-height: 36px;
+}
+
+.filter-tab:hover {
+    background: #d5dbdb;
 }
 
 .filter-tab.active {
     background: #3498db;
     color: white;
-    border-color: #3498db;
 }
 
-.orders-list {
-    max-height: 300px;
-    overflow-y: auto;
+.filter-tab.active[data-filter="all"] {
+    background: #3498db;
 }
 
-.order-item {
-    padding: 12px;
-    margin-bottom: 8px;
-    background: #f8f9fa;
+.filter-tab.active[data-filter="completed"] {
+    background: #27ae60;
+}
+
+.filter-tab.active[data-filter="pending"] {
+    background: #f39c12;
+}
+
+.filter-tab.active[data-filter="cancelled"] {
+    background: #e74c3c;
+}
+
+/* Refresh Button */
+.refresh-orders {
+    background: #3498db;
+    color: white;
+    border: none;
     border-radius: 6px;
-    border-left: 4px solid #95a5a6;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 8px;
+    white-space: nowrap;
+    transition: all 0.2s;
 }
 
-.order-item.completed {
-    border-left-color: #27ae60;
+.refresh-orders:hover {
+    background: #2980b9;
+    transform: translateY(-1px);
 }
 
-.order-item.pending {
-    border-left-color: #f39c12;
-}
-
-.order-item.cancelled {
-    border-left-color: #e74c3c;
-}
-
-.order-symbol {
-    font-weight: bold;
-    color: #2c3e50;
-}
-
-.order-details {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 5px;
-    font-size: 12px;
-    color: #7f8c8d;
-}
-
-.order-status {
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-weight: bold;
-}
-
-.status-completed {
-    background: #d5f4e6;
-    color: #27ae60;
-}
-
-.status-pending {
-    background: #fdebd0;
-    color: #f39c12;
-}
-
-.status-cancelled {
-    background: #fadbd8;
-    color: #e74c3c;
-}
-
-/* Modal Backdrop */
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 999;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .draggable-window {
-        width: 95vw;
-        height: 70vh;
-    }
-}
-
-/* Order Form Styles */
+/* ===== ORDER ENTRY POPUP STYLES ===== */
 .order-form {
-    padding: 10px;
+    padding: 20px;
 }
 
 .form-group {
     margin-bottom: 15px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-row .form-group {
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .form-group label {
@@ -256,42 +243,48 @@
     margin-bottom: 5px;
     font-weight: 600;
     color: #2c3e50;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 .form-input, .form-select {
     width: 100%;
     padding: 8px 12px;
-    border: 2px solid #bdc3c7;
+    border: 1px solid #bdc3c7;
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 12px;
+    background: white;
     box-sizing: border-box;
 }
 
-.form-input:focus, .form-select:focus {
-    border-color: #3498db;
-    outline: none;
-}
-
-.form-input[readonly] {
+.form-input:read-only {
     background-color: #f8f9fa;
-    color: #7f8c8d;
+    color: #6c757d;
+    cursor: not-allowed;
 }
 
+.form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+/* Action Buttons (BUY/SELL) */
 .action-buttons {
     display: flex;
     gap: 10px;
+    margin: 20px 0;
 }
 
 .action-btn {
     flex: 1;
-    padding: 10px;
+    padding: 12px;
     border: 2px solid #bdc3c7;
+    border-radius: 6px;
     background: white;
-    border-radius: 4px;
-    cursor: pointer;
     font-weight: bold;
-    transition: all 0.3s;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
 }
 
 .action-btn.buy-active {
@@ -306,69 +299,282 @@
     border-color: #e74c3c;
 }
 
-.qty-help {
-    font-size: 12px;
-    color: #7f8c8d;
-    margin-top: 4px;
+.action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
+/* Form Buttons (Cancel/Place Order) - FIXED */
+.form-buttons {
+    display: flex !important;
+    gap: 10px !important;
+    margin-top: 20px !important;
+    padding: 10px !important;
+    font-size: 14px !important;
+}
+
+.btn-primary, .btn-secondary {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px !important;
+    white-space: nowrap !important;
+}
+
+.btn-primary {
+    background: #3498db;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2980b9;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: #95a5a6;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #7f8c8d;
+    transform: translateY(-1px);
+}
+
+/* Order Summary */
 .order-summary {
     background: #f8f9fa;
-    padding: 15px;
+    border: 1px solid #e9ecef;
     border-radius: 6px;
-    margin: 20px 0;
+    padding: 15px;
+    margin: 15px 0;
 }
 
 .summary-row {
     display: flex;
     justify-content: space-between;
     margin-bottom: 8px;
+    font-size: 12px;
 }
 
 .summary-row:last-child {
     margin-bottom: 0;
-    font-weight: bold;
-    border-top: 1px solid #ddd;
-    padding-top: 8px;
 }
 
-.form-buttons {
+.summary-row span:first-child {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.summary-row span:last-child {
+    color: #7f8c8d;
+    font-weight: 600;
+}
+
+/* Help Text */
+.help-text {
+    font-size: 11px;
+    color: #7f8c8d;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+/* Popup Window Base Styles */
+.popup-window {
+    position: fixed;
+    background: white;
+    border-radius: var(--popup-border-radius);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 10000;
+    min-width: 400px;
+    min-height: 200px;
+    font-family: Arial, sans-serif;
+    font-size: var(--popup-font-size);
+    color: var(--popup-font-color);
+}
+
+.window-header {
+    background: var(--popup-header-bg);
+    color: var(--popup-header-color);
+    padding: 12px 15px;
+    border-radius: var(--popup-border-radius) var(--popup-border-radius) 0 0;
     display: flex;
-    gap: 10px;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    user-select: none;
 }
 
-.btn-primary {
-    flex: 1;
-    padding: 12px;
-    background: #27ae60;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
+.window-title {
+    font-weight: 600;
     font-size: 14px;
 }
 
-.btn-secondary {
-    flex: 1;
-    padding: 12px;
-    background: #95a5a6;
-    color: white;
+.window-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.minimize-btn, .close-btn {
+    background: none;
     border: none;
-    border-radius: 4px;
+    color: white;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: background 0.2s;
 }
 
-.btn-primary:hover {
-    background: #219a52;
+.minimize-btn:hover, .close-btn:hover {
+    background: rgba(255,255,255,0.2);
 }
 
-.btn-secondary:hover {
-    background: #7f8c8d;
+.window-content {
+    max-height: 500px;
+    overflow-y: auto;
 }
 
-/* Price input animation */
+.resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 15px;
+    height: 15px;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 50%, #bdc3c7 50%);
+}
+
+/* Limit Price Group */
 #limitPriceGroup {
     transition: all 0.3s ease;
+}
+
+/* Input number styling */
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Select dropdown styling */
+.form-select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px;
+    padding-right: 30px;
+}
+
+/* Index Prices Popup Styles */
+.index-prices-container {
+    padding: 15px;
+}
+
+.index-item {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.index-price {
+    font-weight: bold;
+    color: #27ae60;
+}
+
+/* Ensure buttons stay visible at all font sizes */
+#orderEntryWindow .window-content {
+    overflow: visible !important;
+    min-height: 400px !important;
+}
+
+#orderEntryWindow .order-form {
+    min-height: 350px !important;
+    overflow: visible !important;
+}
+
+#orderEntryWindow .form-buttons {
+    position: relative !important;
+    z-index: 10 !important;
+    margin-bottom: 20px !important;
+}
+/* Smart Option Chain Scrolling */
+.option-chain {
+    max-height: 70vh;
+    overflow-y: hidden;
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    margin: 10px 0;
+    transition: all 0.3s ease;
+}
+
+.option-chain:hover {
+    overflow-y: auto;
+}
+
+.option-chain {
+    scroll-behavior: smooth;
+}
+
+.option-chain::-webkit-scrollbar {
+    width: 8px;
+}
+
+.option-chain::-webkit-scrollbar-thumb {
+    background: #3498db;
+    border-radius: 4px;
+}
+
+.option-chain::-webkit-scrollbar-track {
+    background: #ecf0f1;
+}
+/* Update this section in your CSS */
+.option-chain th {
+    position: sticky !important;
+    top: 0;
+    background: #34495e !important;
+    z-index: 100 !important;
+    /* Fix for border-collapse issues */
+    box-shadow: 0 1px 0 #34495e, 0 2px 2px -1px rgba(0,0,0,0.4); 
+}
+/* Ensure the table itself doesn't fight the scroll */
+.option-chain table {
+    border-collapse: separate; /* Sometimes 'collapse' breaks sticky in popups */
+    border-spacing: 0;
+    width: 100%;
+}
+/* Responsive design */
+@media (max-width: 768px) {
+    .popup-window {
+        min-width: 300px;
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+    }
+    
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .action-buttons, .form-buttons {
+        flex-direction: column;
+    }
 }

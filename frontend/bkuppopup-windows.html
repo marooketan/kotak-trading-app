@@ -64,35 +64,30 @@
         </div>
         <div class="window-content">
             <div class="filter-tabs">
-                <button class="filter-tab active" data-filter="all">All</button>
-                <button class="filter-tab" data-filter="completed">Completed</button>
-                <button class="filter-tab" data-filter="pending">Pending</button>
-                <button class="filter-tab" data-filter="cancelled">Cancelled</button>
-                <button class="refresh-orders" title="Refresh Orders">🔄</button>
+                <button class="filter-tab active" data-status="all">All</button>
+                <button class="filter-tab" data-status="completed">Completed</button>
+                <button class="filter-tab" data-status="pending">Pending</button>
+                <button class="filter-tab" data-status="cancelled">Cancelled</button>
             </div>
-            
-            <div class="table-container">
-                <table class="orders-table">
-                    <thead>
-                        <tr>
-                            <th data-column="time" class="col-time">Time</th>
-                            <th data-column="symbol" class="col-symbol">Symbol</th>
-                            <th data-column="side" class="col-side">Side</th>
-                            <th data-column="quantity" class="col-quantity">Qty</th>
-                            <th data-column="price" class="col-price">Price</th>
-                            <th data-column="status" class="col-status">Status</th>
-                            <th data-column="actions" class="col-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ordersTableBody">
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 20px; color: #7f8c8d;">
-                                Loading orders...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <table class="orders-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                            Loading orders...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
         <div class="resize-handle"></div>
     </div>

@@ -1,34 +1,36 @@
-// Trading Dashboard JavaScript
 class TradingDashboard {
     constructor() {
         this.oneClickMode = false;
         this.pendingOrder = null;
         this.isInitialized = false;
+
+        // NEW: Variables for "Smart Polling" to stop crashes/dancing
+        this.fetchController = null;
+        this.refreshTimer = null;
+
         this.init();
     }
 
     init() {
-    if (this.isInitialized) return;
-    
-    console.log('Initializing TradingDashboard...');
-    this.setupEventListeners();
-    this.setupDropdownListeners();
-    
-    // Load expiries first, then option chain
-    this.loadExpiries().then(() => {
-        this.loadOptionChain();
-    });
-    
-    this.loadPortfolio();
-    
-    // Set up intervals for auto-refresh
-    setInterval(() => this.loadOptionChain(), 1000);
-    setInterval(() => this.loadPortfolio(), 2000);
-    
-    this.isInitialized = true;
-}
+        if (this.isInitialized) return;
+        console.log('Initializing TradingDashboard...');
+        this.setupEventListeners();
+        this.setupDropdownListeners();
+
+        // Initial Data Load
+        this.loadExpiries().then(() => this.startRealtimeUpdates());
+
+        // Blank out P&L at start
+        this.blankPortfolio();
+
+        // Set initial Login Banner
+        this.updateLoginBanner(false);
+
+        this.isInitialized = true;
+    }
+
     setupEventListeners() {
-        // Toggle mode button
+        // One-click mode toggle
         const toggleBtn = document.getElementById('toggleMode');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
@@ -43,152 +45,85 @@ class TradingDashboard {
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => {
                 this.loadOptionChain();
-                this.loadPortfolio();
+            });
+        }
+
+        // Order History Button
+        const orderHistoryBtn = document.getElementById('orderHistoryBtn');
+        if (orderHistoryBtn) {
+            orderHistoryBtn.addEventListener('click', () => {
+                this.showOrderHistory();
+            });
+        }
+
+        // Portfolio Button
+        const portfolioBtn = document.getElementById('portfolioBtn');
+        if (portfolioBtn) {
+            portfolioBtn.addEventListener('click', () => {
+                this.showPortfolio();
+            });
+        }
+
+        // Index Prices Button
+        const indexPricesBtn = document.getElementById('indexPricesBtn');
+        if (indexPricesBtn) {
+            indexPricesBtn.addEventListener('click', () => {
+                this.showIndexPrices();
             });
         }
 
         this.setupLoginListeners();
     }
 
-    // NEW: Dropdown functionality
     setupDropdownListeners() {
-        // Market type change
-        document.getElementById('marketType').addEventListener('change', (e) => {
-            this.updateIndices(e.target.value);
+        // When any dropdown changes, force an immediate reload
+        ['marketType', 'indexSelect', 'expirySelect', 'strikeCount'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.loadOptionChain());
         });
-
-        // Index change
-        document.getElementById('indexSelect').addEventListener('change', () => {
-            this.loadExpiries();
-            this.loadOptionChain();
-        });
-
-        // Expiry change
-        document.getElementById('expirySelect').addEventListener('change', () => {
-            this.loadOptionChain();
-        });
-
-        // Strike count change
-        document.getElementById('strikeCount').addEventListener('change', () => {
-            this.loadOptionChain();
-        });
-    }
-
-    async updateIndices(market) {
-        const indexSelect = document.getElementById('indexSelect');
-        
-        try {
-            const response = await fetch(`/api/indices?market=${market}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                indexSelect.innerHTML = data.indices.map(index => 
-                    `<option value="${index}">${index}</option>`
-                ).join('');
-                
-                // Load expiries for the first index
-                this.loadExpiries();
-                this.loadOptionChain();
-            }
-        } catch (error) {
-            console.error('Failed to load indices:', error);
-            // Fallback to hardcoded indices
-            const fallbackIndices = market === 'NFO' 
-                ? ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
-                : ['SENSEX', 'BANKEX'];
-                
-            indexSelect.innerHTML = fallbackIndices.map(index => 
-                `<option value="${index}">${index}</option>`
-            ).join('');
-        }
-    }
-
-    async loadExpiries() {
-    const market = document.getElementById('marketType').value;
-    const expirySelect = document.getElementById('expirySelect');
-    
-    try {
-        const response = await fetch(`/api/expiries?market=${market}`);
-        const data = await response.json();
-        
-        if (data.success || data.expiries) {
-            if (data.expiries && data.expiries.length > 0) {
-                expirySelect.innerHTML = data.expiries.map(expiry => 
-                    `<option value="${expiry}">${expiry}</option>`
-                ).join('');
-            } else {
-                // Fallback if no expiries returned
-                this.setDefaultExpiries();
-            }
-        } else {
-            this.setDefaultExpiries();
-        }
-    } catch (error) {
-        console.error('Failed to load expiries:', error);
-        this.setDefaultExpiries();
-    }
-}
-
-setDefaultExpiries() {
-    const expirySelect = document.getElementById('expirySelect');
-    const defaultExpiries = [
-        '25-Jan-2024',
-        '01-Feb-2024', 
-        '08-Feb-2024',
-        '15-Feb-2024',
-        '22-Feb-2024',
-        '29-Feb-2024'
-    ];
-    
-    expirySelect.innerHTML = defaultExpiries.map(expiry => 
-        `<option value="${expiry}">${expiry}</option>`
-    ).join('');
-}
-    async loadOptionChain() {
-        const market = document.getElementById('marketType').value;
-        const index = document.getElementById('indexSelect').value;
-        const expiry = document.getElementById('expirySelect').value;
-        const strikes = document.getElementById('strikeCount').value;
-        
-        try {
-            const response = await fetch(`/api/option-chain?market=${market}&index=${index}&expiry=${expiry}&strikes=${strikes}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                this.displayOptionChain(data.data);
-            } else {
-                // Fallback to mock data
-                const mockData = this.generateMockOptionChain();
-                this.displayOptionChain(mockData);
-            }
-        } catch (error) {
-            console.log('Using mock data for option chain');
-            const mockData = this.generateMockOptionChain();
-            this.displayOptionChain(mockData);
-        }
     }
 
     setupLoginListeners() {
-        document.getElementById('hideLoginBtn').addEventListener('click', () => {
-            document.querySelector('.login-section').style.display = 'none';
-        });
+        const hideLoginBtn = document.getElementById('hideLoginBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const totpInput = document.getElementById('totpInput');
 
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            this.kotakLogin();
-        });
+        if (hideLoginBtn) {
+            hideLoginBtn.addEventListener('click', () => {
+                document.querySelector('.login-section').style.display = 'none';
+            });
+        }
 
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            this.kotakLogout();
-        });
+        if (nextBtn) {
+            nextBtn.textContent = "Login Securely";
+            nextBtn.addEventListener('click', () => {
+                this.performOneStepLogin();
+            });
+        }
+
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.kotakLogout());
+        }
+
+        // Support Enter Key for TOTP
+        if (totpInput) {
+            totpInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.performOneStepLogin();
+                }
+            });
+        }
     }
 
-    async kotakLogin() {
-        const totp = document.getElementById('totpInput').value;
-        const mpin = document.getElementById('mpinInput').value;
+    async performOneStepLogin() {
+        const totpInput = document.getElementById('totpInput');
+        const totp = totpInput.value.trim();
         const status = document.getElementById('loginStatus');
 
-        if (!totp || !mpin) {
-            status.innerHTML = '❌ Please enter both TOTP and MPIN';
+        if (!totp || totp.length !== 6 || isNaN(totp)) {
+            status.innerHTML = '❌ Enter valid 6-digit TOTP';
             status.style.color = '#e74c3c';
             return;
         }
@@ -197,218 +132,330 @@ setDefaultExpiries() {
         status.style.color = '#f39c12';
 
         try {
-            // Simple test - always succeed for now
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            status.innerHTML = '✅ Login Successful (Demo Mode)';
-            status.style.color = '#27ae60';
-            this.showLoggedInState();
-            document.getElementById('totpInput').value = '';
-            document.getElementById('mpinInput').value = '';
-            
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `totp=${encodeURIComponent(totp)}&mpin=000000`
+            });
+
+            const data = await response.json();
+            console.log('Login response:', data);
+
+            if (data.success) {
+                status.innerHTML = '✅ Login Successful!';
+                status.style.color = '#27ae60';
+                this.showLoggedInState();
+                totpInput.value = '';
+                this.updateLoginBanner(true);
+
+                // Start order history updates if available
+                if (window.popupManager && typeof window.popupManager.startOrderHistoryUpdates === 'function') {
+                    setTimeout(() => {
+                        window.popupManager.startOrderHistoryUpdates();
+                    }, 1000);
+                }
+
+                // START THE SMART POLLING LOOP
+                this.startRealtimeUpdates();
+
+            } else {
+                status.innerHTML = `❌ Login failed: ${data.message}`;
+                status.style.color = '#e74c3c';
+                this.updateLoginBanner(false);
+            }
+
         } catch (error) {
-            status.innerHTML = '❌ Login failed';
+            console.error('Login error:', error);
+            status.innerHTML = '❌ Network Error';
             status.style.color = '#e74c3c';
+            this.updateLoginBanner(false);
         }
     }
 
     kotakLogout() {
+        // Stop the smart polling loop
+        if (this.refreshTimer) clearTimeout(this.refreshTimer);
+
+        if (window.popupManager && typeof window.popupManager.stopOrderHistoryUpdates === 'function') {
+            window.popupManager.stopOrderHistoryUpdates();
+        }
+
         this.showLoggedOutState();
-        document.getElementById('loginStatus').innerHTML = '💡 Enter TOTP + MPIN';
+        document.querySelector('.login-section').style.display = 'block';
+        document.getElementById('loginStatus').innerHTML = 'Enter TOTP to Login';
         document.getElementById('loginStatus').style.color = '#7f8c8d';
+        this.updateLoginBanner(false);
     }
 
     showLoggedInState() {
-        document.getElementById('logoutSection').style.display = 'block';
-        document.getElementById('kotakStatus').textContent = '(Live Mode)';
-        document.getElementById('kotakStatus').style.color = '#27ae60';
+        const logoutSection = document.getElementById('logoutSection');
+        if (logoutSection) logoutSection.style.display = 'block';
+
+        const kStatus = document.getElementById('kotakStatus');
+        if (kStatus) {
+            kStatus.textContent = '(Live Mode)';
+            kStatus.style.color = '#27ae60';
+        }
     }
 
     showLoggedOutState() {
-        document.getElementById('logoutSection').style.display = 'none';
-        document.getElementById('kotakStatus').textContent = '(Demo Mode)';
-        document.getElementById('kotakStatus').style.color = '#e74c3c';
-    }
+        const logoutSection = document.getElementById('logoutSection');
+        if (logoutSection) logoutSection.style.display = 'none';
 
-    generateMockOptionChain() {
-        const strikes = [];
-        const atm = 18200;
-        const baseTime = Date.now() / 1000;
-        
-        for (let i = -5; i <= 5; i++) {
-            const strike = atm + (i * 100);
-            const baseCall = Math.max(50 + Math.abs(i) * 10, 10);
-            const basePut = Math.max(45 + Math.abs(i) * 8, 8);
-            const callMove = (Math.random() - 0.5) * 4;
-            const putMove = (Math.random() - 0.5) * 4;
-            const timeCall = Math.sin(baseTime * 0.5 + i) * 1;
-            const timePut = Math.cos(baseTime * 0.5 + i) * 1;
-            
-            const callPrice = Math.max(baseCall + callMove + timeCall, 1);
-            const putPrice = Math.max(basePut + putMove + timePut, 1);
-            
-            strikes.push({
-                strike: strike,
-                call: {
-                    bid: Math.max(callPrice - 1, 0.5),
-                    ask: callPrice + 1,
-                    ltp: callPrice
-                },
-                put: {
-                    bid: Math.max(putPrice - 1, 0.5),
-                    ask: putPrice + 1,
-                    ltp: putPrice
-                }
-            });
+        const kStatus = document.getElementById('kotakStatus');
+        if (kStatus) {
+            kStatus.textContent = '(Demo Mode)';
+            kStatus.style.color = '#e74c3c';
         }
-        return strikes;
     }
 
-    displayOptionChain(data) {
-        const tbody = document.getElementById('optionData');
-        const table = document.getElementById('optionTable');
-        const loading = document.getElementById('loading');
-        
-        if (!tbody || !table || !loading) return;
-        
-        loading.style.display = 'none';
-        table.style.display = 'table';
-        
-        tbody.innerHTML = data.map(row => `
-            <tr>
-                <td><strong>${row.strike}</strong></td>
-                <td>${row.call_bid || row.call.bid.toFixed(2)}</td>
-                <td>${row.call_ask || row.call.ask.toFixed(2)}</td>
-                <td>${row.call_ltp || row.call.ltp.toFixed(2)}</td>
-                <td>
-                    <button class="buy-btn" onclick="dashboard.placeOrder('BUY', 'CE', ${row.strike}, ${row.call_ask || row.call.ask})">BUY</button>
-                    <button class="sell-btn" onclick="dashboard.placeOrder('SELL', 'CE', ${row.strike}, ${row.call_bid || row.call.bid})" style="margin-top: 2px;">SELL</button>
-                </td>
-                <td>${row.put_bid || row.put.bid.toFixed(2)}</td>
-                <td>${row.put_ask || row.put.ask.toFixed(2)}</td>
-                <td>${row.put_ltp || row.put.ltp.toFixed(2)}</td>
-                <td>
-                    <button class="buy-btn" onclick="dashboard.placeOrder('BUY', 'PE', ${row.strike}, ${row.put_ask || row.put.ask})">BUY</button>
-                    <button class="sell-btn" onclick="dashboard.placeOrder('SELL', 'PE', ${row.strike}, ${row.put_bid || row.put.bid})" style="margin-top: 2px;">SELL</button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    placeOrder(action, optionType, strike, price) {
-        const quantity = parseInt(document.getElementById('quantity')?.value) || 50;
-        const product = document.getElementById('productType')?.value || 'NRML';
-        const symbol = `NIFTY25JAN${strike}${optionType}`;
-        
-        const orderDetails = {symbol, action, quantity, price, product, strike, optionType};
-
-        if (this.oneClickMode) {
-            this.placeConfirmedOrder(orderDetails);
+    updateLoginBanner(isLoggedIn) {
+        let banner = document.getElementById('loginBanner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = "loginBanner";
+            banner.style.fontWeight = "bold";
+            banner.style.fontSize = "16px";
+            banner.style.margin = "8px 0";
+            banner.style.padding = "6px 12px";
+            banner.style.borderRadius = "8px";
+            const header = document.querySelector('.login-section');
+            if(header) header.parentNode.insertBefore(banner, header);
+        }
+        if (isLoggedIn) {
+            banner.textContent = "Logged In";
+            banner.style.background = "#e7f9ec";
+            banner.style.color = "#218838";
+            banner.style.border = "1px solid #27ae60";
         } else {
-            // Show the editable order entry window instead of simple confirmation
-            showOrderEntryWindow(orderDetails);
+            banner.textContent = "Logged Out";
+            banner.style.background = "#fdecec";
+            banner.style.color = "#c0392b";
+            banner.style.border = "1px solid #e74c3c";
         }
     }
 
-    showOrderConfirmation(order) {
-        // Ensure no existing modal is present
-        this.closeAllOrderModals();
-        
-        this.pendingOrder = order;
-        
-        // Create a centered modal for order confirmation
-        const modal = document.createElement('div');
-        modal.className = 'modal-backdrop';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;';
-        modal.innerHTML = `
-            <div class="modal-content" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 1001; min-width: 400px;">
-                <h3 style="margin: 0 0 15px 0; color: #2c3e50;">Confirm Order</h3>
-                <div style="text-align: left; margin: 20px 0;">
-                    <p><strong>Symbol:</strong> ${order.symbol}</p>
-                    <p><strong>Action:</strong> ${order.action}</p>
-                    <p><strong>Quantity:</strong> ${order.quantity} (${order.quantity/50} lots)</p>
-                    <p><strong>Price:</strong> ₹${order.price.toFixed(2)}</p>
-                    <p><strong>Product:</strong> ${order.product}</p>
-                    <p><strong>Total:</strong> ₹${(order.quantity * order.price).toFixed(2)}</p>
-                </div>
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button class="cancel-order-btn" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
-                    <button class="confirm-order-btn" style="padding: 10px 20px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Confirm Order</button>
-                </div>
-            </div>
-        `;
-        
-        // Add event listeners to the buttons
-        modal.querySelector('.cancel-order-btn').addEventListener('click', () => {
-            this.closeOrderModal(modal);
-        });
-        
-        modal.querySelector('.confirm-order-btn').addEventListener('click', () => {
-            this.placeConfirmedOrder();
-        });
-        
-        document.body.appendChild(modal);
-    }
-
-    closeAllOrderModals() {
-        const modals = document.querySelectorAll('.modal-backdrop');
-        modals.forEach(modal => {
-            document.body.removeChild(modal);
-        });
-        this.pendingOrder = null;
-    }
-
-    closeOrderModal(modal) {
-        if (modal && modal.parentNode) {
-            document.body.removeChild(modal);
-        }
-        this.pendingOrder = null;
-    }
-
-    async placeConfirmedOrder(order = null) {
-        const orderToPlace = order || this.pendingOrder;
-        if (!orderToPlace) return;
-        
+    async loadExpiries() {
+        const expirySelect = document.getElementById('expirySelect');
         try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            alert(`✅ Order placed!\n${orderToPlace.symbol} ${orderToPlace.action} ${orderToPlace.quantity} @ ${orderToPlace.price}`);
-            
-            // Close the modal
-            this.closeAllOrderModals();
-            this.pendingOrder = null;
-            this.loadPortfolio();
+            const response = await fetch(`/api/expiries`);
+            const data = await response.json();
+            if (data.success && data.expiries.length > 0) {
+                expirySelect.innerHTML = data.expiries.map(expiry =>
+                    `<option value="${expiry}">${expiry}</option>`
+                ).join('');
+            }
         } catch (error) {
-            alert('❌ Order failed');
+            console.error('Failed to load expiries:', error);
         }
     }
 
-    async loadPortfolio() {
-        const mockPnl = {
-            total: (Math.random() * 2000 - 1000).toFixed(2),
-            positions: [
-                { symbol: 'NIFTY25JAN18200CE', pnl: (Math.random() * 500 - 250).toFixed(2) },
-                { symbol: 'NIFTY25JAN18300PE', pnl: (Math.random() * 300 - 150).toFixed(2) }
-            ]
-        };
-        this.displayPortfolio(mockPnl);
+    // === NEW SMART POLLING LOGIC STARTS HERE ===
+
+    startRealtimeUpdates() {
+        if (this.refreshTimer) clearTimeout(this.refreshTimer);
+        this.loadOptionChain();
     }
 
-    displayPortfolio(portfolio) {
+    async loadOptionChain() {
+        // 1. STOP THE OLD REQUEST (Prevent "Dancing")
+        if (this.fetchController) {
+            this.fetchController.abort();
+            this.fetchController = null;
+        }
+        
+        // 2. STOP THE OLD TIMER (Prevent "Crash")
+        if (this.refreshTimer) {
+            clearTimeout(this.refreshTimer);
+            this.refreshTimer = null;
+        }
+
+        // 3. START NEW REQUEST
+        this.fetchController = new AbortController();
+        const signal = this.fetchController.signal;
+
+        try {
+            const market = document.getElementById('marketType')?.value || 'NFO';
+            const index = document.getElementById('indexSelect')?.value || 'NIFTY';
+            const expiry = document.getElementById('expirySelect')?.value;
+            const strikes = document.getElementById('strikeCount')?.value || '10';
+
+            // If inputs aren't ready, wait 1s and retry
+            if (!expiry) {
+                this.refreshTimer = setTimeout(() => this.loadOptionChain(), 1000);
+                return;
+            }
+
+            const response = await fetch(`/api/option-chain?market=${market}&index=${index}&expiry=${expiry}&strikes=${strikes}`, {
+                signal: signal
+            });
+
+            if (!response.ok) throw new Error('Network response was not ok');
+            const data = await response.json();
+
+            // 4. UPDATE UI (Only if this request is still valid)
+            if (!signal.aborted) {
+                if (data.success) {
+                    this.displayOptionChain(data.data, data.spot);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('optionTable').style.display = 'table';
+                }
+                // SCHEDULE NEXT UPDATE
+                this.refreshTimer = setTimeout(() => this.loadOptionChain(), 1000);
+            }
+
+        } catch (error) {
+            // 5. ERROR HANDLING
+            if (error.name === 'AbortError') {
+                // This request was killed on purpose. DO NOT RESCHEDULE.
+                // This kills the "Ghost Loop".
+                return;
+            }
+            console.log('Error loading chain:', error);
+            
+            // If it was a real error (not cancelled), try again in 1s
+            this.refreshTimer = setTimeout(() => this.loadOptionChain(), 1000);
+        }
+    }
+
+    // === NEW SMART POLLING LOGIC ENDS HERE ===
+
+    displayOptionChain(data, spotPrice) {
+        const tbody = document.getElementById('optionData');
+        const loading = document.getElementById('loading');
+        const optionTable = document.getElementById('optionTable');
+
+        if (loading) loading.style.display = 'none';
+        if (optionTable) optionTable.style.display = data.length ? '' : 'none';
+
+        if (tbody) {
+            const atmStrike = Math.round(spotPrice / 50) * 50;
+            tbody.innerHTML = data.map(row => {
+                const isATM = row.strike === atmStrike;
+                const atmStyle = isATM ? 'background-color: #fff9c4;' : '';
+                return `
+                <tr class="${row.strike < spotPrice ? 'itm' : 'otm'}" style="${atmStyle}">
+                    <td><strong>${row.strike}</strong>${isATM ? ' <span style="color:#ffb300;font-weight:bold;">ATM</span>' : ''}</td>
+                    <td>${parseFloat(row.call.bid).toFixed(2)}</td>
+                    <td>${parseFloat(row.call.ask).toFixed(2)}</td>
+                    <td>${parseFloat(row.call.ltp).toFixed(2)}</td>
+                    <td>
+                        <button class="buy-btn" onclick="dashboard.placeOrder('BUY', 'CE', ${row.strike}, ${parseFloat(row.call.ask)}, '${row.pTrdSymbol}')">B</button>
+                        <button class="sell-btn" onclick="dashboard.placeOrder('SELL', 'CE', ${row.strike}, ${parseFloat(row.call.bid)}, '${row.pTrdSymbol}')">S</button>
+                    </td>
+                    <td>${parseFloat(row.put.bid).toFixed(2)}</td>
+                    <td>${parseFloat(row.put.ask).toFixed(2)}</td>
+                    <td>${parseFloat(row.put.ltp).toFixed(2)}</td>
+                    <td>
+                        <button class="buy-btn" onclick="dashboard.placeOrder('BUY', 'PE', ${row.strike}, ${parseFloat(row.put.ask)}, '${row.pTrdSymbol}')">B</button>
+                        <button class="sell-btn" onclick="dashboard.placeOrder('SELL', 'PE', ${row.strike}, ${parseFloat(row.put.bid)}, '${row.pTrdSymbol}')">S</button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+    }
+
+    placeOrder(action, optionType, strike, price, symbol) {
+        const lots = parseInt(document.getElementById('orderQty')?.value) || 1;
+        const product = document.getElementById('productType')?.value || 'NRML';
+        
+        const orderDetails = {
+            symbol: symbol,
+            action: action,
+            price: price,
+            strike: strike,
+            optionType: optionType,
+            quantity: lots * 75,
+            product: product
+        };
+        
+        console.log("📝 Opening order entry for:", orderDetails);
+        
+        if (typeof openOrderEntry === 'function') {
+            openOrderEntry(orderDetails);
+        } else {
+            console.error('openOrderEntry function not found');
+            if (confirm(`Place ${action} order for ${symbol} at ${price}?`)) {
+                this.placeConfirmedOrder(orderDetails);
+            }
+        }
+    }
+
+    blankPortfolio() {
         const pnlElement = document.getElementById('pnlDisplay');
-        if (!pnlElement) return;
+        if (pnlElement) pnlElement.innerHTML = '';
+    }
+
+    placeConfirmedOrder(orderDetails) {
+        console.log("🔄 Placing order:", orderDetails);
         
-        const totalPnl = parseFloat(portfolio.total);
-        
-        pnlElement.innerHTML = `
-            <div class="${totalPnl >= 0 ? 'positive' : 'negative'}">
-                Total: ₹${portfolio.total}
-            </div>
-            <div style="font-size: 14px; margin-top: 5px;">
-                ${portfolio.positions.map(pos => 
-                    `${pos.symbol}: <span class="${parseFloat(pos.pnl) >= 0 ? 'positive' : 'negative'}">₹${pos.pnl}</span>`
-                ).join(' | ')}
-            </div>
-        `;
+        const orderData = {
+            symbol: orderDetails.symbol,
+            transaction_type: orderDetails.action === 'BUY' ? 'B' : 'S',
+            quantity: orderDetails.quantity,
+            product_code: orderDetails.product || 'NRML',
+            price: orderDetails.price.toString(),
+            order_type: orderDetails.priceType === 'MARKET' ? 'MKT' : 'L',
+            validity: 'DAY',
+            am_flag: 'NO'
+        };
+
+        console.log("📦 Sending to API:", orderData);
+
+        fetch('/api/place-order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(orderData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("📡 API Response:", data);
+            if (data.success) {
+                alert(`✅ Order Placed Successfully! Order Number: ${data.order_number}`);
+                
+                if (window.popupManager && typeof window.popupManager.refreshOrderHistory === 'function') {
+                    setTimeout(() => {
+                        window.popupManager.refreshOrderHistory();
+                    }, 1000);
+                }
+            } else {
+                alert(`❌ Order Failed: ${data.message}`);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Order Error:', error);
+            alert('❌ Network Error - Check console');
+        });
+    }
+
+    showOrderHistory() {
+        if (typeof showOrderHistoryWindow === 'function') {
+            showOrderHistoryWindow();
+        } else {
+            console.error('showOrderHistoryWindow function not found');
+        }
+    }
+
+    showPortfolio() {
+        if (window.popupManager && typeof window.popupManager.showWindow === 'function') {
+            window.popupManager.showWindow('portfolioWindow');
+        } else {
+            console.error('PopupManager not available for portfolio');
+        }
+    }
+
+    showIndexPrices() {
+        if (window.popupManager && typeof window.popupManager.showWindow === 'function') {
+            window.popupManager.showWindow('indexPricesWindow');
+            if (typeof startIndexPriceUpdates === 'function') {
+                startIndexPriceUpdates();
+            }
+        } else {
+            console.error('PopupManager not available for index prices');
+        }
     }
 }
 
@@ -416,3 +463,45 @@ let dashboard;
 document.addEventListener('DOMContentLoaded', () => {
     dashboard = new TradingDashboard();
 });
+
+function getDashboard() {
+    return dashboard;
+}
+
+// Index Prices Functions
+function showIndexPricesWindow() {
+    if (window.popupManager && typeof window.popupManager.showWindow === 'function') {
+        window.popupManager.showWindow('indexPricesWindow');
+        startIndexPriceUpdates();
+    }
+}
+
+function updateIndexPricesPopup() {
+    fetch('/api/index-quotes')
+        .then(r => r.json())
+        .then(data => {
+            data.forEach(item => {
+                if (item.exchange_token === "Nifty 50")
+                    document.getElementById('popupNiftyPrice').textContent = item.ltp;
+                if (item.exchange_token === "Nifty Bank")
+                    document.getElementById('popupBankniftyPrice').textContent = item.ltp;
+                if (item.exchange_token === "SENSEX")
+                    document.getElementById('popupSensexPrice').textContent = item.ltp;
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching index prices:', error);
+        });
+}
+
+let indexPriceInterval;
+function startIndexPriceUpdates() {
+    updateIndexPricesPopup();
+    if (!indexPriceInterval)
+        indexPriceInterval = setInterval(updateIndexPricesPopup, 1000);
+}
+
+function stopIndexPriceUpdates() {
+    clearInterval(indexPriceInterval);
+    indexPriceInterval = null;
+}

@@ -10,16 +10,34 @@ body {
     min-height: 100vh;
     padding: 20px;
 }
-
+/* Update the .container */
 .container {
-    max-width: 1400px;
-    margin: 0 auto;
+    /* POSITIONING & FLOATING */
+    position: absolute; 
+    top: 50px;
+    left: 50px; /* Moved slightly left so you can see it better */
+    margin: 0; 
+    
+    /* SIZE SETTINGS */
+    max-width: none; 
+    min-width: 600px;
+    
+    /* Start with a fixed height so it fits on screen */
+    height: 80vh; 
+    min-height: 400px;
+
+    /* STYLE */
     background: white;
     border-radius: 15px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    
+    /* CRITICAL: This allows scrollbars inside if you shrink it too much */
+    overflow: hidden; 
+    display: flex;
+    flex-direction: column;
 }
 
+/* Update the header to look like a handle */
 header {
     background: linear-gradient(135deg, #2c3e50, #34495e);
     color: white;
@@ -27,8 +45,11 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    
+    /* Key change for dragging: */
+    cursor: move; 
+    user-select: none; /* Prevents text highlighting while dragging */
 }
-
 header h1 {
     font-size: 28px;
     font-weight: 300;
@@ -304,4 +325,67 @@ tr:hover {
     gap: 10px;
     align-items: center;
     flex-wrap: wrap;
+}
+/* === FINAL FIXED OPTION CHAIN STYLES === */
+
+/* 1. Reset the table styles so sticky works */
+.option-chain table {
+    border-collapse: separate !important; 
+    border-spacing: 0;
+    width: 100%;
+    /* CRITICAL FIX: This undoes the 'overflow: hidden' from line 93 */
+    overflow: visible !important; 
+}
+
+/* 2. The Container that scrolls */
+.option-chain {
+    max-height: 70vh;        
+    overflow-y: auto !important; /* Force scrollbar (overrides popup-styles.css) */
+    display: block;          
+    padding: 0 !important;   
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    position: relative;      
+    background: white;       /* Prevents transparency issues */
+}
+
+/* 3. The Sticky Header itself */
+.option-chain th {
+    position: sticky !important;
+    top: 0;
+    z-index: 100;            /* Higher Z-index to stay above everything */
+    background: #34495e !important; 
+    color: white;
+    /* This shadow covers the gap if borders are separated */
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+    /* Fix for border leaking */
+    border-top: none;
+    border-bottom: 1px solid #2c3e50; 
+}
+
+/* 4. Fix for the Loading Text */
+#loading {
+    padding: 20px;
+    text-align: center;
+}
+/* Force the resize handle to be visible and on top */
+.container .resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 25px; /* Made it bigger */
+    height: 25px;
+    /* Red triangle so you can definitely see it */
+    background: linear-gradient(135deg, transparent 50%, #e74c3c 50%); 
+    cursor: nwse-resize;
+    z-index: 9999; /* Forces it above everything else */
+}
+/* Allow the dashboard content to scroll if window is small */
+.dashboard, .option-chain-container, .orders-section {
+    overflow-y: auto;
+}
+/* Ensure the Option Chain doesn't fight the resize */
+.option-chain-container {
+    flex: 1; /* Takes up remaining space */
+    min-height: 0; /* Allows it to shrink */
 }
