@@ -1,0 +1,42 @@
+# verify_file.py
+import pandas as pd
+import os
+from datetime import datetime
+
+MASTER_PATH = r"C:\Users\Ketan\Desktop\kotak_master.csv"
+
+def verify():
+    if not os.path.exists(MASTER_PATH):
+        print("❌ File not found.")
+        return
+
+    # Read file
+    try:
+        df = pd.read_csv(MASTER_PATH)
+        df.columns = df.columns.str.strip()
+    except:
+        print("⚠️ Reading failed, trying separator detection...")
+        df = pd.read_csv(MASTER_PATH, sep='|')
+        df.columns = df.columns.str.strip()
+
+    # Filter NIFTY
+    nifty = df[df['pSymbolName'] == 'NIFTY']
+    
+    # Get all unique dates
+    timestamps = nifty['lExpiryDate'].dropna().unique()
+    
+    # Check for future dates
+    now = datetime.now().timestamp()
+    future_dates = [ts for ts in timestamps if ts > now]
+    
+    if future_dates:
+        print(f"✅ SUCCESS! Found {len(future_dates)} future expiries.")
+        nearest = min(future_dates)
+        furthest = max(future_dates)
+        print(f"   📅 Nearest Expiry: {datetime.fromtimestamp(nearest).strftime('%d-%b-%Y')}")
+        print(f"   📅 Furthest Expiry: {datetime.fromtimestamp(furthest).strftime('%d-%b-%Y')}")
+    else:
+        print("❌ FAIL: File still contains only old dates.")
+
+if __name__ == "__main__":
+    verify()
