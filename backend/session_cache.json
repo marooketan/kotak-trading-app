@@ -1,0 +1,17 @@
+{
+    "current_user": "kavita",
+    "sessions": {
+        "ketan": {
+            "base_url": "https://mis.kotaksecurities.com",
+            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6WyJUcmFkZSJdLCJleHAiOjE3NjUzOTE0MDAsImp0aSI6ImU3ZDMwZDIzLTUwOTctNGRiOS04ZjA5LWUyODQ3NWI5MTZhNyIsImlhdCI6MTc2NTM1NzUzNiwiaXNzIjoibG9naW4tc2VydmljZSIsInN1YiI6IjZhZTYwYmU5LWJkY2MtNDMwOS1hMTQ2LWJjODBlZTU5YzFiMSIsInVjYyI6IlpIMzI5IiwibmFwIjoiIiwieWNlIjoiZVlcXDYgJD81XCJyXHUwMDAyXHUwMDBlXHUwMDAyZFx1MDAwMFx1MDAxMGIiLCJmZXRjaGNhY2hpbmdydWxlIjowLCJjYXRlZ29yaXNhdGlvbiI6IiJ9.pwXGjmJtyqHFIYSDmkmCd82GNc1Cri5sXBBHQbssHTah3rghpEeTQmH9-GZHWwEw_cq4KnvzNQxVy21zyCc9p5Q0hNy2eS04MPBJhapMROTFPOp-S-kLLHMRz7nHfoQVqQ5psHDDS8wxLcjcqWpbn9L3Ku0ysGooK1aKELSKjc0hmyl8ygQd-XVeeGdWk4Sj6FAYop1f6ef9B6-LREZ6NXI6iRrmaU4G7_ZkLxszFn6O-NBMN4yiuCQMU0J6zLM9RP5tbL9erRAZHJGdBUR8p1w5WUTWfzEEw9ifP4Ni9mvYk11N2lTGkW-DE7Lb9s1sGtBUFkDPW3ynl0GFdSq-Sg",
+            "sid": "905081e8-6fdd-4894-a1b3-d4c6b488c848",
+            "authenticated": true
+        },
+        "kavita": {
+            "base_url": "https://cis.kotaksecurities.com",
+            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6WyJUcmFkZSJdLCJleHAiOjE3NjUzOTE0MDAsImp0aSI6IjNkY2U1MDc0LTc1OTctNGRjYi04ZmMzLTAzMjRiMzU2YmE0ZSIsImlhdCI6MTc2NTM2MDAzOSwiaXNzIjoibG9naW4tc2VydmljZSIsInN1YiI6IjQ5ODIyYTIzLTIwMDktNGJlZi05OTQ2LTUwMzAzNzJiMTY5ZiIsInVjYyI6IlgxTjM1IiwibmFwIjoiIiwieWNlIjoiZVlcXDYjJSw1XCJ5XHUwMDA1XG5ccnVcdTAwMDBcdTAwMTBiIiwiZmV0Y2hjYWNoaW5ncnVsZSI6MCwiY2F0ZWdvcmlzYXRpb24iOiIifQ.VIMYtITvICEaAUnfEJtBbO4Cb4sVmielE5pRRzkeRFV-to8xaChNEjbde7mqhQdaOnTDJNu6V3tjMEQSKVVo4U603_duONSoo1BpWGssHK77QopBPMxAiFFOSAkhC-avv2xW37XehWFFH1gBIXWueSBrKlBgucWjyO_kXmjJ-VsRcr_BfypYp-sUNNjk7U-kV5uZJ2aVsfc7L79AoIg-PgIQlHsqoyllsnan3C0mS33TfgP3mUn7uxByAFEk0pUvgZG2UUbvmRgzS2jC2eXmy_quKOjs01XDX6_4NAUBYHYZZ3rhLOd24a7IHdmcfXChwC9c5gr33InSeqCZ9DWuVA",
+            "sid": "9cfab412-0fc5-4712-aaa0-9f1ccfbad810",
+            "authenticated": true
+        }
+    }
+}

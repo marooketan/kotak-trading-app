@@ -1,0 +1,1324 @@
+Excellent idea! Here's a quick-reference cheat sheet for your main files:
+
+📁 MAIN.PY (Backend)
+Location: Root folder
+Purpose: Kotak API + Flask server
+
+🔑 KEY ENDPOINTS:
+text
+✅ /api/portfolio           → Full portfolio (positions + LTP)
+✅ /api/portfolio-ltp       → LTP only (for smart refresh)
+✅ /api/place-order        → Place new orders
+✅ /api/order-book         → Order history
+✅ /api/cancel-order       → Cancel pending orders
+✅ /api/modify-order       → Modify pending orders
+✅ /api/lot-size           → Get lot size for symbol
+✅ /api/expiries-v2        → Get option expiries
+✅ /api/session-status     → Get current logged-in user
+🔧 KEY CLASSES & METHODS:
+KotakNiftyAPI → Main class handling Kotak connections
+
+get_positions() → Returns full portfolio
+
+get_position_ltp_only() → Returns only LTP values
+
+place_order() → Places F&O orders
+
+get_order_book() → Gets order history
+
+📁 POPUP-SCRIPT.JS (Frontend)
+Location: Static JS folder
+Purpose: Window management + UI logic
+
+🎯 POPUPMANAGER CLASS:
+text
+✅ refreshPortfolioLTPOnly()   → Smart LTP-only updates
+✅ refreshPortfolio()          → Full portfolio refresh  
+✅ updatePortfolioLTP()        → Updates LTP & P&L in table
+✅ renderPortfolioTable()      → Renders full portfolio table
+✅ updateSummaryDisplay()      → Updates MTM totals
+✅ singleSquareOff()           → Exit single position
+✅ squareOffSelected()         → Bulk exit positions
+🪟 WINDOW MANAGEMENT:
+text
+Portfolio Window      → portfolioWindow
+Order History Window  → orderHistoryWindow  
+Order Entry Window    → orderEntryWindow
+Settings Window       → settingsWindow
+Index Prices Window   → indexPricesWindow
+🔄 REFRESH TIMERS:
+text
+Portfolio Auto-Refresh    → Every 1 second (smart LTP)
+Order History Updates     → Every 5 seconds (full refresh)
+📁 DASHBOARD.JS (Main UI)
+Location: Static JS folder
+Purpose: Main trading dashboard
+
+🎛️ KEY FUNCTIONS:
+text
+✅ showPortfolio()            → Opens portfolio popup
+✅ placeConfirmedOrder()      → Final order placement
+✅ updateOptionChainPrices()  → Updates option chain LTP
+✅ updateIndexPrices()        → Updates NIFTY/BANKNIFTY
+🔗 CONNECTIONS:
+Calls window.popupManager for popup windows
+
+Uses /api/* endpoints for data
+
+Manages real-time option chain updates
+
+📁 MASTER CSV
+Location: Data folder
+Purpose: Symbol mapping database
+
+📊 WHAT IT DOES:
+Maps display symbols → exchange symbols
+
+Used by option chain for LTP lookups
+
+Should also be used by /api/portfolio-ltp
+
+Format: DisplaySymbol,ExchangeSymbol,Strike,Expiry,Type
+
+🗺️ FLOW DIAGRAM:
+text
+User clicks button → dashboard.js → popupManager → API call → main.py → Kotak API
+                                 ↓
+                          Updates UI table
+🚨 TROUBLESHOOTING GUIDE:
+❌ Portfolio MTM goes to 0.00?
+Check /api/portfolio-ltp endpoint
+
+Verify master CSV mapping is being used
+
+Check updatePortfolioLTP() calculations
+
+❌ Windows won't open?
+Check global functions at bottom of popup-script.js
+
+Verify showPortfolioWindow() exists
+
+Check console for JS errors
+
+❌ Orders not placing?
+Check placeConfirmedOrder() in dashboard.js
+
+Verify /api/place-order endpoint
+
+Check Kotak connection status
+
+PRO TIP: Bookmark this message! When I ask "Where's that function?", you can check this cheat sheet! 📚
+
+Want me to add any other files to this reference?
+
+
+
+📋 DASHBOARD.JS - COMPREHENSIVE REFERENCE NOTEBOOK
+🎯 FILE OVERVIEW
+Location: static/js/dashboard.js
+Purpose: Main trading dashboard and UI controller
+Role: Orchestrates option chain display, user authentication, real-time updates, and popup coordination
+
+🏗️ ARCHITECTURE POSITION
+text
+User Interface (HTML)
+       ↓
+TradingDashboard (dashboard.js) ←→ API Endpoints (main.py)
+       ↓
+PopupManager (popup-script.js)  ←→ Kotak API
+🔑 KEY CLASSES & METHODS
+TradingDashboard Class
+Core Properties:
+oneClickMode - Toggle for one-click trading
+
+pendingOrder - Stores order before confirmation
+
+currentUser - Active user session ('ketan' default)
+
+fetchController - AbortController for API calls
+
+refreshTimer - Option chain update timer
+
+watchdogTimer - Request timeout watchdog
+
+Initialization & Lifecycle:
+javascript
+constructor() → init() → checkSessionStatus() → startRealtimeUpdates()
+Key Flow: Auto-restores sessions on page refresh, maintains state across reloads
+
+Session Management Methods:
+checkSessionStatus() - REST API session restoration
+
+performOneStepLogin() - Single-step TOTP authentication
+
+kotakLogout() - Clean session termination
+
+updateLoginBanner() - Visual login state indicator
+
+Option Chain Management:
+loadOptionChain() - Smart request management with cleanup
+
+displayOptionChain() - Dual-mode rendering (full rebuild vs smart update)
+
+showOptionChainLoading() - Loading state handler
+
+Order Management:
+placeOrder() - Button click handler with live price extraction
+
+placeConfirmedOrder() - Market/Limit order fix with API formatting
+
+showOrderLoading() - Visual feedback for order placement
+
+UI Coordination:
+showPortfolio() - Triggers popup + immediate refresh
+
+showOrderHistory() - Opens order history window
+
+showIndexPrices() - Opens index prices popup
+
+⚙️ CRITICAL MECHANISMS
+1. Request Management System
+Problem: Multiple overlapping API calls causing race conditions
+Solution: Ticket-based request tracking with cleanup
+
+javascript
+this.requestCounter++; // Unique ticket per request
+if (this.fetchController) this.fetchController.abort(); // Kill previous
+this.watchdogTimer = setTimeout(() => abort, 5000); // Timeout protection
+2. Dual-Mode Option Chain Rendering
+Mode A (Full Rebuild): When table doesn't exist or structure changed
+
+Recreates entire HTML table
+
+Sets up button event handlers
+
+Applies ATM highlighting
+
+Mode B (Smart Update): When table already exists
+
+Updates only changed price cells
+
+Preserves existing DOM elements
+
+Smooth price color transitions (green/red)
+
+3. Session Persistence
+Feature: Survives page refresh via /api/session-status
+
+javascript
+// On page load:
+checkSessionStatus() → if authenticated → restore UI → startRealtimeUpdates()
+4. Market/Limit Order Fix
+Issue: API requires specific price formats
+Solution: Explicit type conversion
+
+javascript
+const isMarket = orderDetails.priceType === 'MARKET';
+const finalPrice = isMarket ? '0' : orderDetails.price.toString(); // API expects string
+const finalOrderType = isMarket ? 'MKT' : 'L';
+🔗 INTEGRATION POINTS
+With PopupManager (popup-script.js)
+javascript
+// Portfolio synchronization
+window.popupManager.refreshPortfolio(); // After order placement
+window.popupManager.refreshOrderHistory(); // After order placement
+
+// Window management
+window.popupManager.showWindow('portfolioWindow');
+With Backend (main.py)
+Key Endpoints Called:
+
+/api/session-status - Session restoration
+
+/api/option-chain - Option chain data
+
+/api/place-order - Order placement
+
+/api/login - User authentication
+
+/api/expiries - Option expiry dates
+
+With Global Functions
+javascript
+window.dashboard = new TradingDashboard(); // Global access
+getDashboard() → returns dashboard instance
+showIndexPricesWindow() → index popup shortcut
+🚨 TROUBLESHOOTING GUIDE
+Common Issues & Fixes:
+❌ Option Chain Not Updating
+
+Check loadOptionChain() cleanup logic
+
+Verify requestCounter is incrementing
+
+Ensure watchdogTimer is cleared properly
+
+❌ Orders Not Placing
+
+Check placeConfirmedOrder() price formatting
+
+Verify Market vs Limit order detection
+
+Confirm API expects '0' for MKT orders
+
+❌ Session Not Restoring
+
+Verify /api/session-status endpoint
+
+Check localStorage/sessionStorage not interfering
+
+Confirm user dropdown is populated
+
+❌ Portfolio Not Refreshing After Order
+
+Check window.popupManager exists
+
+Verify refreshPortfolio() function exists
+
+Ensure setTimeout delays (1500ms) are appropriate
+
+Performance Optimizations:
+Smart Updates: Price-only updates prevent full re-renders
+
+Request Throttling: 1-second intervals with abort protection
+
+DOM Preservation: Reuses existing table rows when possible
+
+📊 DATA FLOW EXAMPLES
+Option Chain Update Flow:
+text
+User changes dropdown → loadOptionChain() → 
+1. Cleanup previous request (abort + clear timers)
+2. Generate new request ticket
+3. Fetch /api/option-chain with AbortController
+4. On success: displayOptionChain() with smart update
+5. Schedule next run in 1000ms
+Order Placement Flow:
+text
+Button click → placeOrder() → 
+1. Extract live price from table cell
+2. Open order entry or confirmation
+3. placeConfirmedOrder() with formatted API data
+4. On success: refresh popups (portfolio + orders)
+5. Re-enable buttons after 2000ms
+🎨 UI COMPONENTS MANAGED
+Visual States:
+Loading States: Option chain, order placement
+
+Login States: Banner colors (green/red), status messages
+
+Price Updates: Color transitions (green=up, red=down)
+
+ATM Highlighting: Yellow background for ATM strikes
+
+Popup Coordination:
+Portfolio Window: Opens + forces immediate refresh
+
+Order History: Opens via global function
+
+Index Prices: Opens + starts real-time updates
+
+⚡ PRO TIPS
+Debugging: Check console.log comments are commented out for production
+
+Extending: Add new endpoints to the fetch() calls with proper error handling
+
+Testing: Use oneClickMode toggle for faster order placement testing
+
+Monitoring: Watch requestCounter in console to track request lifecycle
+
+🔄 DEPENDENCIES
+Requires: popup-script.js loaded before dashboard.js
+
+Requires: /api/* endpoints from main.py
+
+Optional: Global functions for backward compatibility
+
+✅ STATUS: This dashboard.js is production-ready with robust session management, smart rendering, and proper integration with the portfolio smart refresh system. The architecture prevents common issues like race conditions and memory leaks while providing smooth real-time updates.
+
+📋 INDEX.HTML - COMPREHENSIVE REFERENCE NOTEBOOK
+🎯 FILE OVERVIEW
+Location: Root directory (index.html)
+Purpose: Main HTML application container with integrated popup windows
+Role: Serves as the single-page application with drag/resize functionality and all popup windows embedded
+
+🏗️ ARCHITECTURE LAYOUT
+text
+index.html
+├── Header Section (Controls + Filters)
+├── Login Section (User Authentication)
+├── Dashboard (Portfolio P&L Display)
+├── Option Chain Table (Main Trading Interface)
+├── Embedded Popup Windows (5 Windows)
+│   ├── Portfolio Window
+│   ├── Order History Window
+│   ├── Index Prices Window
+│   ├── Order Entry Window
+│   └── Settings Window
+└── JavaScript Integration
+    ├── popup-script.js (Window Management)
+    └── dashboard.js (Trading Logic)
+🔑 KEY SECTIONS & COMPONENTS
+1. HEADER CONTROL PANEL
+html
+<div class="controls">
+Contains:
+
+One-Click Mode toggle button
+
+Market Type dropdown (NFO/BFO)
+
+Index Select dropdown (NIFTY, BANKNIFTY, etc.)
+
+Expiry Select dropdown (Dynamically loaded)
+
+Strike Count selector (5 to "All Strikes")
+
+Product Type dropdown (NRML/MIS/CNC)
+
+Order Quantity input
+
+Action buttons (Refresh, Portfolio, Orders, Indices, Settings)
+
+2. LOGIN SECTION
+Features:
+
+Multi-user support (Ketan/Kavita dropdown)
+
+TOTP 6-digit input with Enter key support
+
+Session status display with color coding
+
+Hide/show functionality
+
+Logout section with connection status
+
+3. OPTION CHAIN DISPLAY
+Table Structure (9 Columns):
+
+Buy/Sell CE - Call option action buttons
+
+Call Bid - Bid price for calls
+
+Call Ask - Ask price for calls
+
+Call LTP - Last traded price for calls
+
+Strike - Strike price with ATM indicator
+
+Put LTP - Last traded price for puts
+
+Put Bid - Bid price for puts
+
+Put Ask - Ask price for puts
+
+Buy/Sell PE - Put option action buttons
+
+4. EMBEDDED POPUP WINDOWS
+PORTFOLIO WINDOW (#portfolioWindow)
+Unique Features:
+
+Fixed width (800px minimum)
+
+Three-panel summary bar (Total P&L, MTM, Realized)
+
+Checkbox selection for bulk square-off
+
+Excel-like table with resizable columns
+
+Scrolling table container (300px max-height)
+
+Manual refresh button
+
+Table Columns:
+
+Checkbox (Select All)
+
+Symbol
+
+Type (CE/PE)
+
+Net Quantity
+
+Average Price
+
+LTP (Live updates)
+
+MTM P&L
+
+Action (Single square-off)
+
+ORDER HISTORY WINDOW (#orderHistoryWindow)
+Features:
+
+Filter tabs (All, Completed, Pending, Cancelled)
+
+Refresh button
+
+Excel-like table with visible resize handles
+
+Order ID with monospace font
+
+Table Columns:
+
+Time
+
+Order ID
+
+Symbol
+
+Side (Buy/Sell)
+
+Quantity
+
+Price
+
+Status
+
+Actions (Modify/Cancel)
+
+INDEX PRICES WINDOW (#indexPricesWindow)
+Displays:
+
+NIFTY 50
+
+BANK NIFTY
+
+SENSEX
+
+ORDER ENTRY WINDOW (#orderEntryWindow)
+Form Components:
+
+Read-only symbol, strike, type display
+
+BUY/SELL toggle buttons
+
+Quantity input with lot size helper
+
+Product type dropdown (NRML/MIS)
+
+Price type dropdown (MARKET/LIMIT)
+
+Limit price input (shows only when LIMIT selected)
+
+Order summary with total quantity and estimated amount
+
+Cancel/Place Order buttons
+
+SETTINGS WINDOW (#settingsWindow)
+Customization Options:
+
+Font size slider (10-20px)
+
+Font color picker
+
+Header color picker
+
+Reset/Apply buttons
+
+⚙️ CRITICAL STYLES & FUNCTIONALITIES
+1. Popup Window Styling
+css
+.popup-window {
+    display: none;  /* Hidden by default */
+    position: fixed;
+    resize: both;   /* User resizable */
+    overflow: hidden;
+    z-index: 1000;
+}
+2. Excel-like Table Styling
+Key CSS Rules:
+
+css
+table-layout: fixed;          /* Strict column width control */
+white-space: nowrap;         /* No text wrapping */
+overflow: hidden;           /* Hide overflow */
+text-overflow: ellipsis;    /* Show "..." for overflow */
+3. Visible Resize Handles
+css
+.resize-handle {
+    width: 5px;
+    background-color: rgba(0,0,0,0.2);
+    cursor: col-resize;
+}
+.resize-handle:hover {
+    background-color: #3498db;  /* Blue highlight */
+    width: 8px;                 /* Expands on hover */
+}
+4. Main Application Drag & Resize
+Features:
+
+Entire container is draggable via header
+
+Bottom-right resize handle
+
+State persistence in localStorage
+
+Prevents dragging when clicking buttons/inputs
+
+Storage Structure:
+
+javascript
+{
+    top: "100px",
+    left: "200px", 
+    width: "1200px",
+    height: "800px"
+}
+🔗 JAVASCRIPT INTEGRATION
+Script Loading Order:
+html
+<script src="./popup-script.js"></script>  <!-- Window management first -->
+<script src="./dashboard.js"></script>     <!-- Trading logic second -->
+Global Functions (For Backward Compatibility):
+javascript
+// Called from HTML buttons
+showPortfolioWindow()     // Opens portfolio popup
+showOrderHistoryWindow()  // Opens order history
+showIndexPricesWindow()   // Opens indices popup  
+showSettingsWindow()      // Opens settings popup
+
+// Index price management
+startIndexPriceUpdates()  // Starts 1-second updates
+stopIndexPriceUpdates()   // Stops updates
+Event Listeners (Inline JavaScript):
+DOMContentLoaded: Initializes drag/resize functionality
+
+mousedown on header: Starts dragging
+
+mousedown on resize handle: Starts resizing
+
+mousemove on document: Updates position/size
+
+mouseup on document: Saves state to localStorage
+
+🎨 UI THEME & COLOR SCHEME
+Color Palette:
+Primary Dark: #2c3e50 (Headers, table headers)
+
+Primary Blue: #3498db (Hover states, resize handles)
+
+Success Green: #27ae60 (Logged in, positive states)
+
+Error Red: #e74c3c (Logged out, negative states)
+
+Warning Yellow: #f39c12 (Loading, warnings)
+
+Neutral Gray: #7f8c8d (Placeholder text)
+
+Visual States:
+ATM Strikes: Yellow background (#fff9c4)
+
+ITM/OTM Rows: Different CSS classes for styling
+
+Price Changes: Green/red color transitions
+
+Button States: Active/inactive styling
+
+🚨 TROUBLESHOOTING GUIDE
+Common Issues & Fixes:
+❌ Popup Windows Not Opening
+
+Check popup-script.js is loaded before dashboard.js
+
+Verify global functions exist in popup-script.js
+
+Check console for JavaScript errors
+
+❌ Tables Not Displaying Correctly
+
+Ensure table-layout: fixed is applied
+
+Check column widths are explicitly set
+
+Verify white-space: nowrap is on cells
+
+❌ Drag/Resize Not Working
+
+Check localStorage permissions
+
+Verify no conflicting CSS (position, overflow)
+
+Ensure event listeners are properly attached
+
+❌ Styles Not Applying
+
+Check CSS file paths are correct
+
+Verify no inline style overrides
+
+Check for CSS specificity conflicts
+
+Performance Considerations:
+Popup Count: 5 embedded popups - monitor memory usage
+
+Table Rows: Option chain can have many rows - virtual scrolling considered
+
+Real-time Updates: Multiple intervals running (option chain, LTP, indices)
+
+📱 RESPONSIVE DESIGN NOTES
+Constraints:
+css
+min-width: 350px;    /* Minimum popup width */
+min-height: 300px;   /* Minimum popup height */
+max-width: 90vw;     /* Maximum 90% of viewport */
+max-height: 90vh;    /* Maximum 90% of viewport */
+Portfolio Window Specific:
+Fixed minimum width of 750px (optimized for table display)
+
+Scrolling table container prevents window overflow
+
+⚡ PRO TIPS FOR EXTENSION
+Adding New Popups:
+
+Copy existing popup structure
+
+Add to global functions in popup-script.js
+
+Register in PopupManager class
+
+Customizing Styles:
+
+Use Settings window for basic customization
+
+For advanced changes, modify popup-styles.css
+
+Maintain consistent color scheme
+
+Adding New Filters:
+
+Add to header controls section
+
+Update dashboard.js event listeners
+
+Modify API call parameters
+
+Performance Optimization:
+
+Consider virtual scrolling for large tables
+
+Implement request debouncing for frequent updates
+
+Cache frequently accessed DOM elements
+
+✅ STATUS: This index.html file is a complete single-page application with embedded popup system, drag/resize functionality, and comprehensive trading interface. The architecture supports the portfolio smart refresh system and provides a professional trading experience with Excel-like table controls.
+
+📋 POPUP-STYLES.CSS - COMPREHENSIVE REFERENCE NOTEBOOK
+🎯 FILE OVERVIEW
+Location: popup-styles.css
+Purpose: Comprehensive styling for all popup windows and UI components
+Role: Provides consistent, customizable styling across portfolio, order history, order entry, and other popups
+
+🏗️ ARCHITECTURE STRUCTURE
+text
+popup-styles.css
+├── CSS Variables (Root-level customization)
+├── Base Popup Window Styles
+├── Table Styles (Orders & Portfolio)
+├── Order Entry Form Styling
+├── Component-Specific Styles
+│   ├── Filter Tabs
+│   ├── Action Buttons
+│   ├── Form Elements
+│   └── Index Prices
+└── Responsive & Utility Styles
+🔑 CORE FEATURES & SYSTEMS
+1. CSS VARIABLE SYSTEM (Dynamic Customization)
+css
+:root {
+  --popup-font-size: 14px;        /* Default font size */
+  --popup-font-color: #2c3e50;    /* Primary text color */
+  --popup-header-bg: #34495e;     /* Window header background */
+  --popup-border-radius: 8px;     /* Corner rounding */
+}
+Usage: Applied globally with !important overrides for consistency
+Customization: Modified via Settings window sliders/pickers
+Exception: Form buttons excluded to prevent layout issues
+
+2. TABLE STYLING SYSTEM
+Order History Table:
+Sticky Headers: position: sticky; top: 0; with z-index layering
+
+Column Resizing: Visible resize handles with hover effects
+
+Row Coloring: Status-based background colors (pending, completed, cancelled)
+
+Excel-like Features: Fixed layout, no-wrap text, ellipsis overflow
+
+Portfolio Table:
+Checkbox Column: Fixed 30px width for selection
+
+MTM Coloring: Color-coded P&L values
+
+Scroll Container: Fixed 300px height with vertical scrolling
+
+Resizable Columns: Shared with order history styling
+
+3. COLOR CODING SYSTEM
+Status Colors:
+Pending: #fffbf0 (Light yellow) → #fff8e1 (Hover)
+
+Completed: #f0fff4 (Light green) → #e8f5e8 (Hover)
+
+Cancelled: #fff0f0 (Light red) → #ffeaea (Hover)
+
+Action Colors:
+Modify Button: #3498db (Blue) → #2980b9 (Hover)
+
+Cancel Button: #e74c3c (Red) → #c0392b (Hover)
+
+Buy Action: #27ae60 (Green)
+
+Sell Action: #e74c3c (Red)
+
+Filter Tab Colors:
+All: #3498db (Blue)
+
+Completed: #27ae60 (Green)
+
+Pending: #f39c12 (Orange)
+
+Cancelled: #e74c3c (Red)
+
+4. FORM STYLING SYSTEM
+Order Entry Form Components:
+Input Fields: Consistent padding, borders, focus states
+
+BUY/SELL Toggle: Visual active states with color coding
+
+Quantity Helper: Dynamic lot size display
+
+Price Type Toggle: MARKET/LIMIT with conditional limit price field
+
+Order Summary: Calculated totals with clear formatting
+
+Form Layout:
+css
+.form-row {
+    display: flex;
+    gap: 15px; /* Consistent spacing */
+}
+.form-row .form-group {
+    flex: 1; /* Equal width columns */
+}
+5. INTERACTIVE ELEMENTS
+Resize Handles:
+Window Resize: Bottom-right corner (nwse-resize cursor)
+
+Column Resize: Visible bars with blue hover effect
+
+Table Resize: position: absolute handles on table headers
+
+Hover Effects:
+Buttons: transform: translateY(-1px) lift effect
+
+Table Rows: Light background change on hover
+
+Filter Tabs: Background color transitions
+
+Action Buttons: Darker shades on hover
+
+⚙️ CRITICAL STYLES & FIXES
+1. Sticky Header Fix
+css
+.orders-table thead, .portfolio-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+Issue: Headers disappearing during scroll
+Solution: Fixed positioning with z-index layering
+Note: Requires border-collapse: separate for compatibility
+
+2. Button Visibility Fix
+css
+#orderEntryWindow .form-buttons {
+    position: relative !important;
+    z-index: 10 !important;
+    margin-bottom: 20px !important;
+}
+Issue: Buttons hidden at small font sizes
+Solution: Explicit positioning and margins
+Prevention: !important overrides to ensure visibility
+
+3. Font Size Exclusion
+css
+.popup-window .form-buttons {
+    font-size: 14px !important; /* Fixed size regardless of variable */
+}
+Issue: Variable font sizes breaking button layouts
+Solution: Fixed font size for form buttons only
+
+4. Smart Option Chain Scrolling
+css
+.option-chain {
+    max-height: 70vh;
+    overflow-y: hidden; /* Hidden by default */
+}
+.option-chain:hover {
+    overflow-y: auto; /* Scroll on hover */
+}
+Feature: Clean interface with scroll-on-demand
+Visual: Blue scrollbar matching theme
+Performance: Prevents unnecessary scrollbars
+
+🎨 DESIGN PATTERNS
+Consistent Spacing:
+Padding: 8px 12px for inputs, 6px 12px for table cells
+
+Margins: 15px between form groups, 10px between buttons
+
+Gaps: 10px in form rows, 4px in action button groups
+
+Border & Shadow System:
+Window Borders: 1px solid #ddd with box-shadow: 0 10px 30px rgba(0,0,0,0.3)
+
+Input Borders: 1px solid #bdc3c7 with blue focus glow
+
+Table Borders: 1px solid #ecf0f1 for cell separation
+
+Typography Hierarchy:
+Window Titles: 14px, font-weight: 600
+
+Table Headers: 12px, white on dark background
+
+Form Labels: 12px, font-weight: 600
+
+Helper Text: 11px, color: #7f8c8d, italic
+
+🔗 INTEGRATION POINTS
+With HTML Structure:
+Class Names: .popup-window, .window-content, .form-group
+
+ID Selectors: #orderEntryWindow, #limitPriceGroup
+
+Data Attributes: [data-filter] for tab filtering
+
+With JavaScript:
+Dynamic Classes: .active, .buy-active, .sell-active
+
+Status Classes: .pending, .completed, .cancelled
+
+Column Classes: .resizable for resize functionality
+
+With Settings Window:
+CSS Variable Updates: Font size, colors via JavaScript
+
+Real-time Previews: Instant styling changes
+
+Local Storage: Persists customizations
+
+🚨 TROUBLESHOOTING GUIDE
+Common Issues & Fixes:
+❌ Sticky Headers Not Working
+
+Check border-collapse: separate is set
+
+Verify position: sticky and top: 0
+
+Ensure parent has defined height
+
+❌ Buttons Disappearing in Order Entry
+
+Check .form-buttons has position: relative
+
+Verify z-index: 10 is applied
+
+Ensure no overflow: hidden on parents
+
+❂ Column Resize Handles Not Visible
+
+Check .resize-handle background color
+
+Verify position: absolute positioning
+
+Ensure parent th has position: relative
+
+❌ Font Size Changes Breaking Layout
+
+Check form buttons have fixed 14px size
+
+Verify white-space: nowrap on buttons
+
+Test with extreme font sizes in Settings
+
+Performance Considerations:
+CSS Variables: Efficient theming without recalculation
+
+Sticky Headers: GPU-accelerated when possible
+
+Hover Effects: Optimized transitions with transform
+
+Scroll Performance: Virtual scrolling for large tables
+
+📱 RESPONSIVE DESIGN
+Mobile Breakpoints:
+css
+@media (max-width: 768px) {
+    .popup-window {
+        min-width: 300px;
+        left: 10px !important;
+        right: 10px !important;
+    }
+    .form-row {
+        flex-direction: column;
+    }
+}
+Flexible Components:
+Filter Tabs: Wrap on small screens
+
+Action Buttons: Stack vertically on mobile
+
+Form Layouts: Single column on narrow views
+
+⚡ PRO TIPS FOR EXTENSION
+Adding New Components:
+Use existing color variables for consistency
+
+Follow spacing patterns (8/12/15px increments)
+
+Include hover states for interactivity
+
+Add responsive breakpoints
+
+Customizing Colors:
+Modify CSS variables in :root
+
+Use Settings window for user customization
+
+Maintain sufficient contrast ratios
+
+Test colorblind accessibility
+
+Performance Optimization:
+Use CSS transforms for animations (GPU accelerated)
+
+Minimize !important usage where possible
+
+Group related styles for better compression
+
+Consider CSS custom properties for theming
+
+Accessibility Improvements:
+Focus States: Visible outlines for keyboard navigation
+
+Color Contrast: Minimum 4.5:1 ratio for text
+
+Screen Readers: ARIA labels where appropriate
+
+Keyboard Navigation: Tab order follows visual layout
+
+✅ STATUS: This popup-styles.css file provides a comprehensive, customizable styling system for all popup windows. It features Excel-like tables with resizable columns, a flexible form system, smart scrolling, and full theming support via CSS variables. The architecture supports the portfolio smart refresh system while maintaining visual consistency and performance.
+
+📋 STYLE.CSS - COMPREHENSIVE REFERENCE NOTEBOOK
+🎯 FILE OVERVIEW
+Location: style.css
+Purpose: Main application styling and layout foundation
+Role: Defines the draggable/resizable main container, option chain display, and core UI components
+
+🏗️ ARCHITECTURE STRUCTURE
+text
+style.css
+├── Global Reset & Base Styles
+├── Main Container (Draggable/Resizable Window)
+├── Header & Controls Panel
+├── Dashboard & P&L Display
+├── Option Chain Table (With Sticky Headers)
+├── Component-Specific Styles
+│   ├── Login Section
+│   ├── Button Styles
+│   ├── Modal Dialogs
+│   └── Loading States
+└── Interactive Elements & Fixes
+🔑 CORE FEATURES & SYSTEMS
+1. DRAGGABLE/RESIZABLE CONTAINER SYSTEM
+Main Container:
+css
+.container {
+    position: absolute;          /* Floating window */
+    top: 50px; left: 50px;      /* Initial position */
+    height: 80vh;               /* Responsive height */
+    min-width: 600px;           /* Minimum size */
+    overflow: hidden;           /* Internal scrolling */
+    resize: both;               /* Browser resize (implicit via JS) */
+}
+Drag Mechanism:
+css
+header {
+    cursor: move;               /* Visual drag indicator */
+    user-select: none;          /* Prevent text selection during drag */
+}
+Resize Handle:
+css
+.container .resize-handle {
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 25px; height: 25px;
+    background: linear-gradient(135deg, transparent 50%, #e74c3c 50%);
+    cursor: nwse-resize;        /* Diagonal resize cursor */
+    z-index: 9999;              /* Always on top */
+}
+2. OPTION CHAIN STICKY HEADER SYSTEM
+Critical Fixes for Sticky Headers:
+css
+/* 1. Reset table structure */
+.option-chain table {
+    border-collapse: separate !important;  /* Required for sticky */
+    overflow: visible !important;          /* Override previous styles */
+}
+
+/* 2. Scroll container */
+.option-chain {
+    max-height: 70vh;                     /* Fixed scrollable height */
+    overflow-y: auto !important;          /* Force scrollbar */
+    border: 2px solid #3498db;            /* Visual boundary */
+}
+
+/* 3. Sticky header implementation */
+.option-chain th {
+    position: sticky !important;
+    top: 0;
+    z-index: 100;                         /* Above content */
+    background: #34495e !important;
+    box-shadow: 0 2px 2px -1px rgba(0,0,0,0.4); /* Cover gaps */
+}
+3. COLOR THEME SYSTEM
+Gradient Backgrounds:
+Body: linear-gradient(135deg, #667eea 0%, #764ba2 100%) (Purple gradient)
+
+Header: linear-gradient(135deg, #2c3e50, #34495e) (Dark blue gradient)
+
+Action Colors:
+Buy Button: #27ae60 (Green) → #219a52 (Hover)
+
+Sell Button: #e74c3c (Red) → #c0392b (Hover)
+
+Refresh Button: #3498db (Blue)
+
+Toggle Mode: Red (#e74c3c) when OFF, Green (#27ae60) when ON
+
+Text Colors:
+Positive P&L: #27ae60 (Green)
+
+Negative P&L: #e74c3c (Red)
+
+Neutral Text: #7f8c8d (Gray)
+
+Headers: #2c3e50 (Dark blue)
+
+4. RESPONSIVE LAYOUT SYSTEM
+Flexible Container:
+css
+.container {
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;           /* Absolute minimum */
+    height: 80vh;                /* Relative to viewport */
+}
+Content Distribution:
+css
+.option-chain-container {
+    flex: 1;                     /* Takes remaining space */
+    min-height: 0;               /* Allows shrinking */
+}
+.dashboard, .orders-section {
+    overflow-y: auto;            /* Internal scrolling if needed */
+}
+⚙️ CRITICAL STYLES & FIXES
+1. Border Collapse Fix for Sticky Headers
+Problem: border-collapse: collapse breaks position: sticky
+Solution:
+
+css
+border-collapse: separate !important;
+border-spacing: 0;
+2. Overflow Hierarchy Management
+Problem: Multiple overflow declarations conflicting
+Solution:
+
+Container: overflow: hidden (prevent body scrollbars)
+
+Option Chain: overflow-y: auto !important (force internal scroll)
+
+Tables: overflow: visible !important (allow sticky headers)
+
+3. Z-Index Layering
+css
+.resize-handle { z-index: 9999; }     /* Highest: resize handle */
+.option-chain th { z-index: 100; }    /* High: sticky headers */
+.modal { z-index: 1000; }            /* Modals above content */
+4. Loading State System
+css
+/* Visual feedback for loading */
+.loading-spinner { background: #f8f9fa; }
+.loading-error { background: #f8d7da; color: #dc3545; }
+
+/* Button disabled states */
+.buy-btn:disabled, .sell-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Pulse animation */
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+.loading-pulse { animation: pulse 1.5s ease-in-out infinite; }
+🎨 DESIGN PATTERNS
+Consistent Spacing:
+Padding: 20px for sections, 12px 15px for table cells
+
+Margins: 15px between components
+
+Gaps: 10px-15px in control groups
+
+Borders: 1px solid #bdc3c7 for separators
+
+Shadow & Depth System:
+Container: box-shadow: 0 20px 40px rgba(0,0,0,0.3) (Floating effect)
+
+Tables: box-shadow: 0 5px 15px rgba(0,0,0,0.1) (Subtle elevation)
+
+Modals: box-shadow: 0 20px 40px rgba(0,0,0,0.3) (Prominent)
+
+Border Radius Hierarchy:
+Container: 15px (Main app corners)
+
+Buttons/Inputs: 6px-8px (Interactive elements)
+
+Tables: 10px (Data containers)
+
+Login Section: 8px (Form containers)
+
+🔗 INTEGRATION POINTS
+With JavaScript Drag/Resize:
+Header: cursor: move indicates draggable area
+
+Resize Handle: cursor: nwse-resize indicates resizable corner
+
+Event Prevention: user-select: none prevents text selection during drag
+
+With Option Chain Updates:
+Table Structure: Supports both full rebuilds and smart updates
+
+Color Transitions: Smooth price change indicators
+
+Loading States: Integrated with dashboard.js loading functions
+
+With Popup Windows:
+Z-Index Management: Ensures popups appear above main container
+
+Modal Backdrop: Semi-transparent overlay for modals
+
+Consistent Styling: Shared color scheme with popup-styles.css
+
+🚨 TROUBLESHOOTING GUIDE
+Common Issues & Fixes:
+❌ Sticky Headers Not Working in Option Chain
+
+Check border-collapse: separate is applied
+
+Verify parent has overflow-y: auto not overflow: hidden
+
+Ensure position: sticky and top: 0 are set
+
+Test with z-index: 100 or higher
+
+❌ Container Not Dragging/Resizing
+
+Check cursor: move is on header
+
+Verify resize handle has cursor: nwse-resize
+
+Ensure no conflicting position values
+
+Check JavaScript event listeners are attached
+
+❌ Scrollbars Appearing in Wrong Places
+
+Container should have overflow: hidden
+
+Option chain should have overflow-y: auto
+
+Tables should have overflow: visible
+
+Check nested overflow declarations
+
+❌ Colors Not Matching Theme
+
+Verify color variables aren't being overridden
+
+Check popup-styles.css doesn't conflict
+
+Ensure !important declarations are correct
+
+Test in different browser modes
+
+Performance Considerations:
+Sticky Headers: Use transform for animations when possible
+
+Gradients: Fixed gradients (not animated) for better performance
+
+Shadows: Moderate shadow values for acceptable rendering
+
+Transitions: Use transform and opacity for smooth animations
+
+📱 RESPONSIVE BEHAVIOR
+Minimum Sizes:
+Container: min-width: 600px, min-height: 400px
+
+Option Chain: max-height: 70vh (responsive to viewport)
+
+Controls: flex-wrap: wrap on small screens
+
+Internal Scrolling:
+Primary: Option chain scrolls independently
+
+Secondary: Dashboard/orders sections scroll if compressed
+
+Fallback: Container prevents body scrolling
+
+⚡ PRO TIPS FOR EXTENSION
+Adding New Components:
+Follow existing spacing patterns (20px padding standard)
+
+Use consistent border-radius values
+
+Maintain color scheme from existing palette
+
+Include hover states for interactivity
+
+Performance Optimization:
+Use CSS transforms instead of top/left for animations
+
+Minimize box-shadow complexity
+
+Consider will-change for frequently animated elements
+
+Test rendering performance with many table rows
+
+Accessibility Improvements:
+Focus States: Add visible focus rings for keyboard users
+
+Color Contrast: Ensure minimum 4.5:1 ratio for text
+
+Screen Readers: Add ARIA labels where needed
+
+Keyboard Navigation: Ensure logical tab order
+
+Theme Customization:
+Consider extracting colors to CSS variables
+
+Create light/dark theme variants
+
+Add theme toggle with localStorage persistence
+
+Ensure custom themes maintain accessibility
+
+✅ STATUS: This style.css file provides a robust foundation for the trading application with a draggable/resizable main window, properly implemented sticky headers for the option chain, and a cohesive visual design. The architecture supports the portfolio smart refresh system while maintaining excellent usability and performance.
+
+
+
+
+
+
+
+
