@@ -1,5 +1,7 @@
-:root {
-  /* Font Customization Variables */
+/* ---------- popup-styles.css (CLEANED & CONSOLIDATED) ---------- */
+
+/* Theme variables */
+:root{
   --popup-font-size: 14px;
   --popup-font-color: #2c3e50;
   --popup-header-bg: #34495e;
@@ -7,7 +9,7 @@
   --popup-border-radius: 8px;
 }
 
-/* Apply CSS variables to all popup content */
+/* Base popup typography & common elements */
 .popup-window,
 .popup-window .window-content,
 .popup-window .orders-table,
@@ -20,561 +22,408 @@
 .popup-window .form-select,
 .popup-window .btn-primary,
 .popup-window .btn-secondary {
-    font-size: var(--popup-font-size);
-    color: var(--popup-font-color);
+  font-size: var(--popup-font-size);
+  color: var(--popup-font-color);
+  font-family: Arial, sans-serif;
 }
 
-/* EXCLUDE form-buttons from the font-size variable to prevent layout issues */
-.popup-window .form-buttons {
-    font-size: 14px !important;
-}
+/* Exclude form-buttons from the global font size to avoid layout issues */
+.popup-window .form-buttons { font-size: 14px !important; }
 
-/* Apply header color specifically */
+/* Window chrome */
 .window-header {
-    background: var(--popup-header-bg) !important;
-    color: var(--popup-header-color) !important;
+  background: var(--popup-header-bg) !important;
+  color: var(--popup-header-color) !important;
+  padding: 12px 15px;
+  border-radius: var(--popup-border-radius) var(--popup-border-radius) 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: move;
+  user-select: none;
+}
+.window-title { font-weight: 600; font-size: 14px; }
+
+/* Popup base */
+.popup-window {
+  position: fixed;
+  background: white;
+  border-radius: var(--popup-border-radius);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  z-index: 10000;
+  min-width: 400px;
+  min-height: 200px;
+  font-size: var(--popup-font-size);
+  color: var(--popup-font-color);
 }
 
-/* Order History Advanced Table Styles */
+/* Window content area (the layout that should scroll) */
+.window-content {
+  padding: 15px;
+  height: calc(100% - 50px);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+/* Generic table defaults used inside popups */
+.popup-window table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 4px;
+  box-shadow: none;
+  /* Don't set overflow here — final override added later */
+}
+
+/* Table cells */
+.popup-window th,
+.popup-window td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #ecf0f1;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Orders table specific styling */
 .orders-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
 }
-
 .orders-table th {
-    background: #34495e;
-    color: white !important; /* <--- THIS FIXES THE INVISIBLE TEXT */
-    padding: 8px 12px;
-    text-align: left;
-    font-weight: 600;
-    border-right: 1px solid #2c3e50;
-    position: relative;
-    user-select: none;
-    cursor: move;
-    min-width: 80px;
+  background: #34495e;
+  color: white !important; /* ensure contrast */
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  border-right: 1px solid #2c3e50;
+  position: relative;
+  user-select: none;
+  cursor: move;
+  min-width: 80px;
 }
-
-.orders-table th:hover {
-    background: #2c3e50;
-}
-
-.orders-table th.dragging {
-    background: #e74c3c;
-    opacity: 0.8;
-}
-
+.orders-table th:hover { background: #2c3e50; }
+.orders-table th.dragging { background: #e74c3c; opacity: 0.8; }
 .orders-table th .resize-handle {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 4px;
-    height: 100%;
-    background: transparent;
-    cursor: col-resize;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  background: transparent;
+  cursor: col-resize;
 }
-
-.orders-table th .resize-handle:hover {
-    background: #3498db;
-}
-
 .orders-table td {
-    padding: 6px 12px;
-    border-bottom: 1px solid #ecf0f1;
-    vertical-align: middle;
+  padding: 6px 12px;
+  border-bottom: 1px solid #ecf0f1;
 }
 
-.orders-table tr:hover td {
-    background: #f8f9fa;
+/* Portfolio table similar styling (use same look as orders) */
+.portfolio-table thead th,
+.orders-table thead th {
+  /* header visual is controlled by consolidated sticky block below */
 }
 
-/* Order Status Colors */
-.order-item.pending td {
-    background: #fffbf0 !important;
-}
+/* Row state colors */
+.order-item.pending td { background: #fffbf0 !important; }
+.order-item.completed td { background: #f0fff4 !important; }
+.order-item.cancelled td { background: #fff0f0 !important; }
 
-.order-item.completed td {
-    background: #f0fff4 !important;
-}
+/* Action buttons inside popups */
+.action-buttons { display: flex; gap: 4px; justify-content: center; }
+.btn-modify, .btn-cancel { padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 10px; transition: all 0.2s; }
+.btn-modify { background: #3498db; color: white; }
+.btn-cancel { background: #e74c3c; color: white; }
 
-.order-item.cancelled td {
-    background: #fff0f0 !important;
-}
-
-.order-item.pending:hover td {
-    background: #fff8e1 !important;
-}
-
-.order-item.completed:hover td {
-    background: #e8f5e8 !important;
-}
-
-.order-item.cancelled:hover td {
-    background: #ffeaea !important;
-}
-
-/* Action Buttons */
-.action-buttons {
-    display: flex;
-    gap: 4px;
-    justify-content: center;
-}
-
-.btn-modify, .btn-cancel {
-    padding: 4px 8px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 10px;
-    transition: all 0.2s;
-}
-
-.btn-modify {
-    background: #3498db;
-    color: white;
-}
-
-.btn-modify:hover {
-    background: #2980b9;
-}
-
-.btn-cancel {
-    background: #e74c3c;
-    color: white;
-}
-
-.btn-cancel:hover {
-    background: #c0392b;
-}
-
-/* Filter Tabs */
+/* Filter tabs */
 .filter-tabs {
-    display: flex;
-    gap: 2px;
-    background: #bdc3c7;
-    border-radius: 6px;
-    padding: 3px;
-    margin-bottom: 15px;
-    position: relative;
-    align-items: center;
+  display: flex;
+  gap: 2px;
+  background: #bdc3c7;
+  border-radius: 6px;
+  padding: 3px;
+  margin-bottom: 15px;
+  align-items: center;
+}
+.filter-tab { flex: 1; padding: 10px 8px; border: none; background: #ecf0f1; color: #7f8c8d; cursor: pointer; border-radius: 4px; font-size: 13px; font-weight: 600; min-height: 36px; }
+.filter-tab.active { background: #3498db; color: white; }
+
+/* Refresh button */
+.refresh-orders { background: #3498db; color: white; border: none; border-radius: 6px; padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+/* Order entry form and small UI niceties */
+.order-form { padding: 20px; }
+.form-group { margin-bottom: 15px; }
+.form-row { display: flex; gap: 15px; margin-bottom: 15px; }
+.form-row .form-group { flex: 1; margin-bottom: 0; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #2c3e50; font-size: 12px; }
+.form-input, .form-select { width: 100%; padding: 8px 12px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 12px; background: white; box-sizing: border-box; }
+.form-input:read-only { background-color: #f8f9fa; color: #6c757d; cursor: not-allowed; }
+.form-input:focus, .form-select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
+
+/* Resize handle (window) */
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 15px;
+  height: 15px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, #bdc3c7 50%);
 }
 
-.filter-tab {
-    flex: 1;
-    padding: 10px 8px;
-    border: none;
-    background: #ecf0f1;
-    color: #7f8c8d;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 600;
-    transition: all 0.2s;
-    min-height: 36px;
+/* Option chain — keep separate rules; preserve sticky there too */
+.option-chain {
+  max-height: 70vh;
+  overflow-y: hidden;
+  border: 2px solid #3498db;
+  border-radius: 8px;
+  margin: 10px 0;
+  transition: all 0.3s ease;
+}
+.option-chain:hover { overflow-y: auto; }
+.option-chain { scroll-behavior: smooth; }
+.option-chain::-webkit-scrollbar { width: 8px; }
+.option-chain::-webkit-scrollbar-thumb { background: #3498db; border-radius: 4px; }
+
+/* Option-chain header sticky (kept high z-index) */
+.option-chain th {
+  position: sticky !important;
+  top: 0;
+  background: #34495e !important;
+  color: white !important;
+  z-index: 100 !important;
+  box-shadow: 0 1px 0 #34495e, 0 2px 2px -1px rgba(0,0,0,0.4);
+}
+.option-chain table { border-collapse: separate; border-spacing: 0; width: 100%; }
+
+/* Small responsive rules */
+@media (max-width: 768px) {
+  .popup-window { min-width: 300px; left: 10px !important; right: 10px !important; width: auto !important; }
+  .form-row { flex-direction: column; gap: 10px; }
 }
 
-.filter-tab:hover {
-    background: #d5dbdb;
+/* Header control visuals */
+.user-display { font-size: 13px; font-weight: 600; margin-left: 8px; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+.mode-badge { background: #27ae60; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+.mode-badge.demo { background: #e74c3c; }
+
+/* Ensure order-entry window form buttons remain visible */
+#orderEntryWindow .window-content { overflow: visible !important; min-height: 400px !important; }
+#orderEntryWindow .order-form { min-height: 350px !important; overflow: visible !important; }
+#orderEntryWindow .form-buttons { position: relative !important; z-index: 10 !important; margin-bottom: 20px !important; }
+
+/* Misc fixes preserved */
+.option-chain th { border-top: none; border-bottom: 1px solid #2c3e50; }
+.loading-spinner, .loading-error { padding: 20px; text-align: center; }
+
+/* -------------------------------------------------------------------
+   FINAL CONSOLIDATED STICKY-HEADER FIX for popup tables (Portfolio & Order History)
+   Place this near the end to override any prior conflicting rules.
+   ------------------------------------------------------------------- */
+.popup-window table {
+  overflow: visible !important;       /* allow sticky to work across browsers */
+  table-layout: fixed !important;     /* makes column sizing predictable */
 }
 
-.filter-tab.active {
-    background: #3498db;
-    color: white;
+.popup-window .table-scroll-wrapper {
+  overflow-y: auto !important;        /* this is the scrolling container for tables */
 }
 
-.filter-tab.active[data-filter="all"] {
-    background: #3498db;
+/* unified sticky header appearance and behavior */
+.popup-window table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  background: #f7f7f9 !important;
+  color: #111 !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.05) !important;
 }
 
-.filter-tab.active[data-filter="completed"] {
-    background: #27ae60;
+/* keep resize handles from changing header look */
+.popup-window table thead th .resize-handle {
+  background: transparent !important;
 }
-
-.filter-tab.active[data-filter="pending"] {
-    background: #f39c12;
-}
-
-.filter-tab.active[data-filter="cancelled"] {
-    background: #e74c3c;
-}
-
-/* Refresh Button */
-.refresh-orders {
-    background: #3498db;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 16px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    margin-left: 8px;
-    white-space: nowrap;
-    transition: all 0.2s;
-}
-
-.refresh-orders:hover {
-    background: #2980b9;
-    transform: translateY(-1px);
-}
-
-/* ===== ORDER ENTRY POPUP STYLES ===== */
-.order-form {
-    padding: 20px;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-row {
-    display: flex;
-    gap: 15px;
-    margin-bottom: 15px;
-}
-
-.form-row .form-group {
-    flex: 1;
-    margin-bottom: 0;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
-    color: #2c3e50;
-    font-size: 12px;
-}
-
-.form-input, .form-select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #bdc3c7;
-    border-radius: 4px;
-    font-size: 12px;
-    background: white;
-    box-sizing: border-box;
-}
-
-.form-input:read-only {
-    background-color: #f8f9fa;
-    color: #6c757d;
-    cursor: not-allowed;
-}
-
-.form-input:focus, .form-select:focus {
-    outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-}
-
-/* Action Buttons (BUY/SELL) */
-.action-buttons {
-    display: flex;
-    gap: 10px;
-    margin: 20px 0;
-}
-
-.action-btn {
-    flex: 1;
-    padding: 12px;
-    border: 2px solid #bdc3c7;
-    border-radius: 6px;
-    background: white;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 14px;
-}
-
-.action-btn.buy-active {
-    background: #27ae60;
-    color: white;
-    border-color: #27ae60;
-}
-
-.action-btn.sell-active {
-    background: #e74c3c;
-    color: white;
-    border-color: #e74c3c;
-}
-
-.action-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-/* Form Buttons (Cancel/Place Order) - FIXED */
-.form-buttons {
+/* Restore proper size for Close & Minimize buttons */
+.window-controls button,
+.minimize-btn,
+.close-btn {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 16px !important;
     display: flex !important;
-    gap: 10px !important;
-    margin-top: 20px !important;
-    padding: 10px !important;
-    font-size: 14px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+}
+/* Fix layout: keep Minimize and Close side-by-side with spacing */
+.window-controls {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;    /* distance between buttons */
 }
 
-.btn-primary, .btn-secondary {
-    flex: 1;
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    font-weight: bold;
+.window-controls button,
+.minimize-btn,
+.close-btn {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    border-radius: 3px !important;
+}
+/* Window highlight when clicked */
+.popup-window.window-active {
+    border: 4px solid #3498db !important;
+    box-shadow: 0 0 30px rgba(52, 152, 219, 0.5) !important;
+}
+/* Sortable table headers */
+.sortable {
     cursor: pointer;
-    transition: all 0.2s;
-    font-size: 14px !important;
-    white-space: nowrap !important;
+    user-select: none;
+    position: relative;
+    padding-right: 20px !important;
 }
 
+.sortable:hover {
+    background-color: #f1f2f6;
+}
+
+.sort-icon {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: #95a5a6;
+}
+
+.sortable[data-sort="asc"] .sort-icon::after {
+    content: "↑";
+    color: #27ae60;
+}
+
+.sortable[data-sort="desc"] .sort-icon::after {
+    content: "↓";
+    color: #e74c3c;
+}
 .btn-primary {
     background: #3498db;
     color: white;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
 .btn-primary:hover {
     background: #2980b9;
-    transform: translateY(-1px);
 }
 
-.btn-secondary {
-    background: #95a5a6;
-    color: white;
+.btn-primary:active {
+    transform: scale(0.97);
+}
+/* === One-Click Big Centered Banner (Updated: large center modal) === */
+.oneclick-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 13000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(900px, 90%);
+  max-width: 900px;
+  min-width: 420px;
+  padding: 60px 80px;
+  background: linear-gradient(90deg,#ff7a7a,#e74c3c);
+  color: #fff;
+  font-weight: 800;
+  font-size: 20px;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(231, 76, 60, 0.35);
+  letter-spacing: 0.4px;
+  box-sizing: border-box;
+  pointer-events: auto;
+  text-align: left;
 }
 
-.btn-secondary:hover {
-    background: #7f8c8d;
-    transform: translateY(-1px);
+/* Left icon — larger */
+.oneclick-banner .oc-icon {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.12);
+  font-size: 28px;
+  line-height: 1;
 }
 
-/* Order Summary */
-.order-summary {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 6px;
-    padding: 15px;
-    margin: 15px 0;
+/* Main text — two lines, prominent */
+.oneclick-banner .oc-text {
+  flex: 1 1 auto;
+  text-align: left;
+  line-height: 1.0;
+}
+.oneclick-banner .oc-text > div:first-child {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+}
+.oneclick-banner .oc-text > div:last-child {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.95;
+  margin-top: 4px;
 }
 
-.summary-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    font-size: 12px;
+/* Close button — slightly larger */
+.oneclick-banner .oc-close {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 18px;
+  transition: background-color .12s, transform .08s;
+}
+.oneclick-banner .oc-close:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
 }
 
-.summary-row:last-child {
-    margin-bottom: 0;
-}
-
-.summary-row span:first-child {
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.summary-row span:last-child {
-    color: #7f8c8d;
-    font-weight: 600;
-}
-
-/* Help Text */
-.help-text {
-    font-size: 11px;
-    color: #7f8c8d;
-    margin-top: 4px;
-    font-style: italic;
-}
-
-/* Popup Window Base Styles */
-.popup-window {
-    position: fixed;
-    background: white;
-    border-radius: var(--popup-border-radius);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    z-index: 10000;
-    min-width: 400px;
-    min-height: 200px;
-    font-family: Arial, sans-serif;
-    font-size: var(--popup-font-size);
-    color: var(--popup-font-color);
-}
-
-.window-header {
-    background: var(--popup-header-bg);
-    color: var(--popup-header-color);
-    padding: 12px 15px;
-    border-radius: var(--popup-border-radius) var(--popup-border-radius) 0 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: move;
-    user-select: none;
-}
-
-.window-title {
-    font-weight: 600;
-    font-size: 14px;
-}
-
-.window-controls {
-    display: flex;
-    gap: 5px;
-}
-
-.minimize-btn, .close-btn {
-    background: none;
-    border: none;
-    color: white;
-    cursor: pointer;
+/* Mobile responsiveness: shrink but remain centered */
+@media (max-width: 700px) {
+  .oneclick-banner {
+    width: calc(100% - 32px);
+    min-width: 0;
+    padding: 14px 16px;
+    border-radius: 10px;
     font-size: 16px;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    transition: background 0.2s;
+  }
+  .oneclick-banner .oc-icon { width: 44px; height: 44px; font-size: 20px; }
+  .oneclick-banner .oc-close { padding: 6px 10px; font-size: 16px; }
+  .oneclick-banner .oc-text > div:first-child { font-size: 18px; }
+  .oneclick-banner .oc-text > div:last-child { font-size: 13px; }
 }
 
-.minimize-btn:hover, .close-btn:hover {
-    background: rgba(255,255,255,0.2);
-}
-
-.window-content {
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.resize-handle {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 15px;
-    height: 15px;
-    cursor: nwse-resize;
-    background: linear-gradient(135deg, transparent 50%, #bdc3c7 50%);
-}
-
-/* Limit Price Group */
-#limitPriceGroup {
-    transition: all 0.3s ease;
-}
-
-/* Input number styling */
-input[type="number"] {
-    -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-/* Select dropdown styling */
-.form-select {
-    cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    background-size: 12px;
-    padding-right: 30px;
-}
-
-/* Index Prices Popup Styles */
-.index-prices-container {
-    padding: 15px;
-}
-
-.index-item {
-    margin-bottom: 15px;
-    padding: 12px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.index-price {
-    font-weight: bold;
-    color: #27ae60;
-}
-
-/* Ensure buttons stay visible at all font sizes */
-#orderEntryWindow .window-content {
-    overflow: visible !important;
-    min-height: 400px !important;
-}
-
-#orderEntryWindow .order-form {
-    min-height: 350px !important;
-    overflow: visible !important;
-}
-
-#orderEntryWindow .form-buttons {
-    position: relative !important;
-    z-index: 10 !important;
-    margin-bottom: 20px !important;
-}
-/* Smart Option Chain Scrolling */
-.option-chain {
-    max-height: 70vh;
-    overflow-y: hidden;
-    border: 2px solid #3498db;
-    border-radius: 8px;
-    margin: 10px 0;
-    transition: all 0.3s ease;
-}
-
-.option-chain:hover {
-    overflow-y: auto;
-}
-
-.option-chain {
-    scroll-behavior: smooth;
-}
-
-.option-chain::-webkit-scrollbar {
-    width: 8px;
-}
-
-.option-chain::-webkit-scrollbar-thumb {
-    background: #3498db;
-    border-radius: 4px;
-}
-
-.option-chain::-webkit-scrollbar-track {
-    background: #ecf0f1;
-}
-/* Update this section in your CSS */
-.option-chain th {
-    position: sticky !important;
-    top: 0;
-    background: #34495e !important;
-    z-index: 100 !important;
-    /* Fix for border-collapse issues */
-    box-shadow: 0 1px 0 #34495e, 0 2px 2px -1px rgba(0,0,0,0.4); 
-}
-/* Ensure the table itself doesn't fight the scroll */
-.option-chain table {
-    border-collapse: separate; /* Sometimes 'collapse' breaks sticky in popups */
-    border-spacing: 0;
-    width: 100%;
-}
-/* Responsive design */
-@media (max-width: 768px) {
-    .popup-window {
-        min-width: 300px;
-        left: 10px !important;
-        right: 10px !important;
-        width: auto !important;
-    }
-    
-    .form-row {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .action-buttons, .form-buttons {
-        flex-direction: column;
-    }
-}
+/* END OF FILE */

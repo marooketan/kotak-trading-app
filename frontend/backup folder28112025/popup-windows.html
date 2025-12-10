@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Popup Windows</title>
+</head>
+<body>
+    <!-- Portfolio Window -->
+    <div id="portfolioWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">💼 Portfolio</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="portfolio-summary">
+                <div class="summary-item">
+                    <span class="label">Total P&L:</span>
+                    <span id="totalPnl" class="value positive">+₹0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Day P&L:</span>
+                    <span id="dayPnl" class="value positive">+₹0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Margin Used:</span>
+                    <span id="marginUsed" class="value">₹0.00</span>
+                </div>
+            </div>
+            <table class="portfolio-table">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Qty</th>
+                        <th>Avg Price</th>
+                        <th>LTP</th>
+                        <th>P&L</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="portfolioTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                            No positions
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Order History Window -->
+    <div id="orderHistoryWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📋 Order History</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="all">All</button>
+                <button class="filter-tab" data-filter="completed">Completed</button>
+                <button class="filter-tab" data-filter="pending">Pending</button>
+                <button class="filter-tab" data-filter="cancelled">Cancelled</button>
+                <button class="refresh-orders" title="Refresh Orders">🔄</button>
+            </div>
+            
+            <div class="table-container">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th data-column="time" class="col-time">Time</th>
+                            <th data-column="symbol" class="col-symbol">Symbol</th>
+                            <th data-column="side" class="col-side">Side</th>
+                            <th data-column="quantity" class="col-quantity">Qty</th>
+                            <th data-column="price" class="col-price">Price</th>
+                            <th data-column="status" class="col-status">Status</th>
+                            <th data-column="actions" class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                                Loading orders...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Order Entry Window -->
+    <div id="orderEntryWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📝 Place Order</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="order-form">
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <input type="text" id="orderSymbol" readonly>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Strike</label>
+                        <input type="text" id="orderStrike" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <input type="text" id="orderOptionType" readonly>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="actionBuy" class="action-btn buy-active">BUY</button>
+                    <button id="actionSell" class="action-btn">SELL</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Quantity (Lots)</label>
+                    <input type="number" id="orderQty" value="1" min="1">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select id="orderTypeSelect">
+                            <option value="NRML">NRML</option>
+                            <option value="MIS">MIS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price Type</label>
+                        <select id="priceTypeSelect">
+                            <option value="MARKET">MARKET</option>
+                            <option value="LIMIT">LIMIT</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" id="limitPriceGroup" style="display: none;">
+                    <label>Limit Price</label>
+                    <input type="number" id="limitPrice" step="0.05" value="0">
+                </div>
+
+                <div class="order-summary">
+                    <div class="summary-row">
+                        <span>Total Quantity:</span>
+                        <span id="totalQty">50</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Estimated Amount:</span>
+                        <span id="estimatedAmount">₹0.00</span>
+                    </div>
+                </div>
+
+                <div class="form-buttons">
+                    <button id="cancelOrderBtn" class="btn-secondary">Cancel</button>
+                    <button id="submitOrderBtn" class="btn-primary">Place Order</button>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Index Prices Window -->
+    <div id="indexPricesWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📊 Indices</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div id="indicesContainer" style="padding: 10px; font-size: 14px;">
+                <div style="margin-bottom: 8px;">
+                    <strong>NIFTY 50:</strong>
+                    <span id="niftySpot">-</span>
+                    <span id="bankNiftySpot">-</span>
+                    <span id="finniftySpot">-</span>
+
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong>BANK NIFTY:</strong>
+                    <span id="bankNiftySpot">-</span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong>FINNIFTY:</strong>
+                    <span id="finniftySpot">-</span>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+</body>
+</html>
