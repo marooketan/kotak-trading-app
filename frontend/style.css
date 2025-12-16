@@ -12,27 +12,21 @@ body {
 }
 /* Update the .container */
 .container {
-    /* POSITIONING & FLOATING */
-    position: absolute; 
+    position: absolute;
     top: 50px;
-    left: 50px; /* Moved slightly left so you can see it better */
-    margin: 0; 
-    
-    /* SIZE SETTINGS */
-    max-width: none; 
-    min-width: 600px;
-    
-    /* Start with a fixed height so it fits on screen */
-    height: 80vh; 
+    left: 50px;
+    margin: 0;
+
+    max-width: 90vw;
+    min-width: 300px;
+    height: 95vh; 
     min-height: 400px;
 
-    /* STYLE */
     background: white;
     border-radius: 15px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    
-    /* CRITICAL: This allows scrollbars inside if you shrink it too much */
-    overflow: hidden; 
+
+    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
@@ -108,9 +102,6 @@ header h1 {
     color: #27ae60;
 }
 
-.option-chain {
-    padding: 20px;
-}
 
 .option-chain h2 {
     margin-bottom: 20px;
@@ -327,17 +318,6 @@ tr:hover {
     overflow: visible !important; 
 }
 
-/* 2. The Container that scrolls */
-.option-chain {
-    max-height: 70vh;        
-    overflow-y: auto !important; /* Force scrollbar (overrides popup-styles.css) */
-    display: block;          
-    padding: 0 !important;   
-    border: 2px solid #3498db;
-    border-radius: 8px;
-    position: relative;      
-    background: white;       /* Prevents transparency issues */
-}
 
 /* 3. The Sticky Header itself */
 .option-chain th {
@@ -463,7 +443,7 @@ tr:hover {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px); /* adjust 120px if header+login row is taller/shorter */
+  min-height: 0;   
   overflow: auto;
 }
 .option-chain-container table {
@@ -485,4 +465,57 @@ tr:hover {
   position: sticky;
   top: 0; /* keeps header visible when scrolling */
   z-index: 2;
+}
+/* Compact option chain rows */
+#optionTable td {
+    padding-top: 1.0px;
+    padding-bottom: 1.0px;
+    line-height: 0.9;
+    font-size: 14px;   /* optional */
+}
+/* === CRISP ICON FIX === */
+.controls button {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-weight: bold;
+}
+
+/* Specific icon improvements */
+#refreshBtn { font-size: 18px !important; }
+button[title="Portfolio"] { font-size: 18px !important; }
+button[title="Orders"] { font-size: 18px !important; }
+button[title="Indices"] { font-size: 18px !important; }
+button[title="Settings"] { font-size: 18px !important; }
+#watchlistBtn { font-size: 18px !important; }
+}
+
+/* === FIX: OPTION CHAIN FILLS SPACE === */
+.option-chain-container {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.option-chain {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    border: 1px solid #3498db !important;
+    border-radius: 8px !important;
+    margin: 5px !important;
+    padding: 0 !important;
+}
+
+.option-chain table {
+    width: 100% !important;
+    min-height: 100% !important;
+}
+
+/* Remove conflicting old rules */
+.option-chain {
+    max-height: none !important;
+    height: auto !important;
 }

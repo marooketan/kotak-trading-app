@@ -47,6 +47,7 @@
 
         .window-content {
             padding: 15px;
+            padding-bottom: 40px;
             display: flex;
             flex-direction: column;
             height: 100%;
@@ -190,6 +191,29 @@
         
         /* Loading/Empty States */
         .qty-help { font-size: 11px; color: #7f8c8d; margin-top: 2px; }
+         /* === Basket Delete column fix === */
+#basketWindow th.delete-col,
+#basketWindow td.delete-col {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    text-align: center;
+}
+
+#basketWindow td.delete-col button {
+    width: 22px;
+    height: 22px;
+    line-height: 20px;
+    padding: 0;
+    font-size: 14px;
+}
+/* Force fixed layout for Basket table */
+#basketWindow table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+
      /* === PORTFOLIO GROUP HEADERS === */
         .group-header {
             background-color: #dfe6e9; /* Light Gray */
@@ -208,6 +232,7 @@
             float: right;
             margin-right: 20px;
         }
+                   
 
     </style>
     </head>
@@ -254,31 +279,33 @@
                     <option value="CNC">CNC</option>
                 </select>
                 
-                <input type="number" id="headerOrderQty" value="1" min="1">
-                <button id="refreshBtn">🔄 Refresh</button>
-                <button onclick="showPortfolioWindow()">📊 Portfolio</button>
-                <button onclick="showOrderHistoryWindow()">📋 Orders</button>
-                <button onclick="showIndexPricesWindow()">🧮 Indices</button>
-                <button onclick="showSettingsWindow()">⚙️ Settings</button>
-                <button id="watchlistBtn" class="btn btn-default">Watchlist</button>
+                <input type="number" id="headerOrderQty" value="1" min="1" max="999" 
+                       style="width: 45px; padding: 6px 8px; font-size: 12px; text-align: center;">
+                <button id="refreshBtn" title="Refresh" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🔄</button>
+                <button onclick="showPortfolioWindow()" title="Portfolio" style="padding: 4px 8px; font-size: 20px; line-height: 1;">📊</button>
+                <button onclick="showBasketWindow()" title="Basket"
+        style="padding: 4px 8px; font-size: 20px; line-height: 1;">🧺</button>
 
-            </div>
+                <button onclick="showOrderHistoryWindow()" title="Orders" style="padding: 4px 8px; font-size: 20px; line-height: 1;">📋</button>
+                <button onclick="showIndexPricesWindow()" title="Indices" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🧮</button>
+                <button onclick="showSettingsWindow()" title="Settings" style="padding: 4px 8px; font-size: 20px; line-height: 1;">⚙️</button>
+                <button id="watchlistBtn" title="Watchlist" style="padding: 4px 8px; font-size: 20px; line-height: 1;">👁️</button>
+                <!-- TOTP & Login Controls -->
+              <input type="text" id="totpInput" placeholder="TOTP" maxlength="6" 
+       style="width: 90px; padding: 6px 8px; font-size: 13px; border: 1px solid #bdc3c7; border-radius: 4px; margin-left: 10px;">
+<button id="headerLogoutBtn" style="padding: 6px 12px; font-size: 13px; background: #e74c3c; color: white; border: none; border-radius: 4px;">Logout</button>
+<span id="headerLoginStatus" style="font-size: 13px; color: #7f8c8d; margin: 0 8px; font-weight: bold;">Enter TOTP to Login</span>
+<select id="userSelect" style="padding: 6px 10px; font-size: 13px; border: 1px solid #bdc3c7; border-radius: 4px;">
+    <option value="ketan">👤 Ketan</option>
+    <option value="kavita">👤 Kavita</option>
+</select>            </div>
         </header>
-                <div class="login-row login-section" style="display:flex; align-items:center; gap:10px; padding:6px 0;">
-    <input type="text" id="totpInput" placeholder="6-digit TOTP"
-           style="padding:6px; border:1px solid #bdc3c7; border-radius:4px; width:100px;" maxlength="6">
-    <span id="loginStatus" style="color:#27ae60; font-weight:bold;">✅ Connected to Kotak</span>
-    <button id="logoutBtn" style="padding:5px 10px; background:#e74c3c; color:white; border:none; border-radius:4px; cursor:pointer;">Logout</button>
-    <select id="userSelect" style="margin-left:auto; padding:6px; border-radius:4px; border:1px solid #bdc3c7; background:white; cursor:pointer;">
-        <option value="ketan">👤 Ketan</option>
-        <option value="kavita">👤 Kavita</option>
-    </select>
-</div>
+               
        
        
 
         <div class="option-chain-container"> 
-           <h2 style="text-align: center; margin-bottom: 15px; color: #2c3e50;">Option Chain</h2>
+           
             <div class="option-chain">
                 <div id="loading">Loading option chain...</div>
                 <table id="optionTable" style="display: none;">
@@ -301,7 +328,7 @@
             </div>
         </div>
 
-        
+         <div class="resize-handle"></div>
     </div>
 
     <div id="portfolioWindow" class="popup-window" style="width: 800px; min-width: 750px; height: 500px;">
@@ -424,31 +451,39 @@
     </div>
 
     <div id="indexPricesWindow" class="popup-window">
-        <div class="window-header">
-            <div class="window-title">📊 Indices</div>
-            <div class="window-controls">
-                <button class="minimize-btn" title="Minimize">-</button>
-                <button class="close-btn" title="Close">×</button>
-            </div>
+    <div class="window-header">
+        <div class="window-title">📊 Indices</div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize">-</button>
+            <button class="close-btn" title="Close">×</button>
         </div>
-        <div class="window-content">
-            <div class="index-prices-container">
-                <div class="index-item">
-                    <strong>NIFTY 50:</strong>
-                    <span id="popupNiftyPrice" class="index-price">-</span>
-                </div>
-                <div class="index-item">
-                    <strong>BANK NIFTY:</strong>
-                    <span id="popupBankniftyPrice" class="index-price">-</span>
-                </div>
-                <div class="index-item">
-                    <strong>SENSEX:</strong>
-                    <span id="popupSensexPrice" class="index-price">-</span>
-                </div>
-            </div>
-        </div>
-        <div class="resize-handle"></div>
     </div>
+    <div class="window-content">
+        <div class="index-prices-container">
+            <div class="index-item">
+                <strong>NIFTY 50:</strong>
+                <span id="popupNiftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>BANK NIFTY:</strong>
+                <span id="popupBankniftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>FINNIFTY:</strong>
+                <span id="popupFinniftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>MIDCP NIFTY:</strong>
+                <span id="popupMidcpniftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>SENSEX:</strong>
+                <span id="popupSensexPrice" class="index-price">-</span>
+            </div>
+        </div>
+    </div>
+    <div class="resize-handle"></div>
+</div>
 
     <div id="orderEntryWindow" class="popup-window">
         <div class="window-header">
@@ -522,7 +557,7 @@
 
                 <div class="form-buttons">
                     <button id="cancelOrderBtn" class="btn-cancel">Cancel</button>
-
+                    <button id="addToBasketBtn" class="btn-secondary">Add to Basket</button>
                     <button id="submitOrderBtn" class="btn-primary">Place Order</button>
                 </div>
             </div>
@@ -612,6 +647,7 @@
                             <th>LTP</th>
                             <th>Buy</th>
                             <th>Sell</th>
+                            <th>Basket</th>
                             <th>Del</th>
                         </tr>
                     </thead>
@@ -621,11 +657,79 @@
             </div>
         </div>
         <div class="resize-handle"></div>
+        
     </div>
-    
-    
+    <div id="basketWindow" class="popup-window" style="display:none; width: 500px; height: 400px;">
+    <div class="window-header">
+        <div class="window-title">🧺 Basket</div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize">-</button>
+            <button class="close-btn" title="Close"
+        onclick="this.closest('.popup-window').style.display='none'">×</button>
+
+        </div>
+    </div>
+
+    <div class="window-content">
+
+    <!-- Scrollable basket area -->
+    <div class="window-content" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+
+
+    <!-- Scrollable basket table -->
+    <div id="basketContent" style="
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+    ">
+        Basket is empty
+    </div>
+
+    <!-- Fixed footer buttons -->
+    <div style="
+        padding-top: 10px;
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        flex-shrink: 0;
+        background: white;
+        border-top: 1px solid #ddd;
+    ">
+        <button onclick="clearBasket()" class="btn-secondary">
+            🗑️ Clear Basket
+        </button>
+
+        <button id="executeBasketBtn"
+                onclick="executeBasketFromUI()"
+                class="btn-primary">
+            ▶ Execute Basket
+        </button>
+    </div>
+
+</div>
+
+
+</div>
+
+
+
+    <div class="resize-handle"></div>
+</div>
+
+    <script src="./storage-manager.js"></script>
     <script src="./popup-script.js"></script>
+    <script src="./popup-user-session.js"></script>
+    <script src="./popup-portfolio.js"></script>
+    <script src="./popup-orderhistory.js"></script>
+    <script src="./popup-orderentry.js"></script>
     <script src="./order-tracker.js"></script> 
+    <script src="./popup-watchlist.js"></script>
+    <script src="./dashboard-market-data.js"></script>
+    <script src="./dashboard-ordering.js"></script>
+    <script src="./dashboard-optionchain.js"></script>
+    <script src="user-activity-manager.js"></script>
+    <script src="watchlist-manager.js"></script>
+    <script src="optionchain-ui-controller.js"></script>
     <script src="./dashboard.js"></script>
     
     <script>
@@ -1015,5 +1119,261 @@ if (localStorage.getItem('pizzaPanelHidden') !== 'true') {
     panel.style.display = 'block';
 }
 </script>
+<script>
+function showBasketWindow() {
+    ensurePopupManagerReady().then(() => {
+        window.popupManager.showWindow('basketWindow');
+        renderBasketUI();
+    });
+}
+
+</script>
+<script>
+function renderBasketUI() {
+    const el = document.getElementById('basketContent');
+    if (!el || !window.dashboard) return;
+   
+    const items = window.dashboard.basketOrders;
+    const allSelected = items.length > 0 && items.every(o => o.selected);
+    if (!items || items.length === 0) {
+        el.innerHTML = 'Basket is empty';
+        return;
+    }
+    
+    // Create table HTML like watchlist
+    el.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+         <colgroup>
+    <col style="width:30px">   <!-- checkbox -->
+    <col>                      <!-- symbol -->
+    <col style="width:70px">   <!-- strike -->
+    <col style="width:50px">   <!-- type -->
+    <col style="width:70px">   <!-- action -->
+    <col style="width:70px">   <!-- lots -->
+    <col style="width:70px">   <!-- ltp -->
+    <col style="width:80px">   <!-- price -->
+    <col style="width:40px">   <!-- delete -->
+</colgroup>
+
+            <thead>
+                <th class="resizable" style="width:30px;"><input type="checkbox"     id="selectAllBasket" ${allSelected ? 'checked' : ''}   onchange="toggleAllBasketItems(this.checked)"></th>
+               <th class="resizable">Symbol</th>
+               <th class="resizable">Strike</th>
+               <th class="resizable">Type</th>
+               <th class="resizable">Action</th>
+               <th class="resizable">Lots</th>
+               <th class="resizable">LTP</th>
+               <th class="resizable">Price</th>
+               <th class="resizable delete-col" style="width:40px; min-width:40px;">Del</th>
+
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map((item, i) => `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="window.dashboard.basketOrders[${i}].selected = this.checked"></td>
+                        <td>${item.symbol}</td>
+                        <td>${item.strike}</td>
+                        <td>${item.optionType}</td>
+                        <td><button onclick="toggleBasketAction(${i})" style="background:${item.action === 'BUY' ? '#27ae60' : '#e74c3c'}; color:white; padding:2px 8px; border:none; border-radius:3px;">${item.action}</button></td>
+                        <td><input type="number" value="${item.qty || 1}" 
+    style="width:70px; padding:4px; text-align:center; font-size:16px; border:1px solid #ddd; border-radius:3px;" 
+    onchange="window.dashboard.basketOrders[${i}].qty = parseInt(this.value) || 1; localStorage.setItem('basketOrders', JSON.stringify(window.dashboard.basketOrders));"></td>
+                        <td id="basketLTP-${i}" style="font-weight:bold; text-align:center;">-</td>
+                        <td>${item.price || 'MARKET'}</td>
+                        <td class="delete-col">
+  <button onclick="window.dashboard.removeBasketItem(${i}); renderBasketUI();">✖</button>
+</td>
+
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    // Update LTP for all items
+updateBasketLTP();
+// Make columns resizable
+setTimeout(makeBasketColumnsResizable, 200);
+// Load saved column widths
+setTimeout(loadBasketColumnWidths, 50);
+}
+function clearBasket() {
+    if (!window.dashboard) return;
+    if (confirm('Are you sure you want to clear all items from basket?')) {
+        window.dashboard.basketOrders = [];
+        localStorage.setItem('basketOrders', JSON.stringify([]));
+        renderBasketUI();
+    }
+}
+function makeBasketColumnsResizable() {
+    const table = document.querySelector('#basketWindow table');
+    if (!table) return;
+    
+    const cols = table.querySelectorAll('col');
+
+    cols.forEach((col, index) => {
+    const header = table.querySelectorAll('th.resizable')[index];
+
+        let startX, startWidth;
+        
+        const resizeHandle = document.createElement('div');
+        resizeHandle.style.cssText = `
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 5px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 20;
+            background: rgba(0,0,0,0.1);
+        `;
+        header.style.position = 'relative';
+        header.appendChild(resizeHandle);
+        
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startX = e.clientX;
+            startWidth = col.offsetWidth;
+
+            
+            const onMouseMove = (e) => {
+                let width = startWidth + (e.clientX - startX);
+                const minWidth = header.classList.contains('delete-col') ? 40 : 30;
+if (width < minWidth) width = minWidth;
+             
+                col.style.width = `${width}px`;
+
+            };
+            
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                saveBasketColumnWidths();
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    });
+}
+function saveBasketColumnWidths() {
+    const table = document.querySelector('#basketWindow table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.resizable');
+    const widths = Array.from(headers).map(th => th.style.width);
+    localStorage.setItem('basketColumnWidths', JSON.stringify(widths));
+}
+function toggleAllBasketItems(checked) {
+    if (!window.dashboard) return;
+    window.dashboard.basketOrders.forEach(item => {
+        item.selected = checked;
+    });
+    renderBasketUI();
+}
+async function updateBasketLTP() {
+    if (!window.dashboard || !window.dashboard.basketOrders.length) return;
+    
+    try {
+        // Get all unique symbols from basket
+        const symbols = window.dashboard.basketOrders
+            .map(item => item.symbol)
+            .filter((symbol, index, arr) => arr.indexOf(symbol) === index) // Unique
+            .join(',');
+        
+        if (!symbols) return;
+        
+        // Use same API as watchlist
+        const response = await fetch(`/api/portfolio-ltp?symbols=${encodeURIComponent(symbols)}`);
+        const data = await response.json();
+        
+        if (data.success && data.ltp_data) {
+            window.dashboard.basketOrders.forEach((item, i) => {
+                const ltpCell = document.getElementById(`basketLTP-${i}`);
+                if (!ltpCell) return;
+                
+                const quote = data.ltp_data[item.symbol];
+                if (quote && quote.ltp !== undefined) {
+                    ltpCell.textContent = quote.ltp.toFixed(2);
+                    // Color based on change (we don't have change data, so use simple logic)
+                    ltpCell.style.color = quote.ltp > (parseFloat(ltpCell.dataset.last) || 0) ? '#27ae60' : '#e74c3c';
+                    ltpCell.dataset.last = quote.ltp;
+                } else {
+                    ltpCell.textContent = '-';
+                    ltpCell.style.color = '#000';
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Basket LTP fetch error:', error);
+    }
+}
+// Also update when option chain refreshes
+if (typeof window !== 'undefined') {
+    window.addEventListener('optionChainUpdated', updateBasketLTP);
+}
+function loadBasketColumnWidths() {
+    const saved = localStorage.getItem('basketColumnWidths');
+    if (!saved) return;
+    
+    const widths = JSON.parse(saved);
+    const table = document.querySelector('#basketWindow table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.resizable');
+    headers.forEach((th, i) => {
+        if (widths[i]) th.style.width = widths[i];
+    });
+}
+
+function toggleBasketAction(index) {
+    if (!window.dashboard || !window.dashboard.basketOrders[index]) return;
+    const item = window.dashboard.basketOrders[index];
+    item.action = item.action === 'BUY' ? 'SELL' : 'BUY';
+    renderBasketUI();
+}
+function onBasketItemCheckboxChange(index, checked) {
+    if (!window.dashboard) return;
+    window.dashboard.basketOrders[index].selected = checked;
+    renderBasketUI();
+}
+
+</script>
+<script>
+async function executeBasketFromUI() {
+    if (!window.dashboard) return;
+
+    const btn = document.getElementById('executeBasketBtn');
+    if (!btn) return;
+
+    // Disable button immediately
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = 'Executing…';
+
+    try {
+        await window.dashboard.executeBasket();
+
+    } finally {
+        // Re-enable after execution completes
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+
+    renderBasketUI();
+}
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const addToBasketBtn = document.getElementById('addToBasketBtn');
+    if (addToBasketBtn && window.dashboard) {
+        addToBasketBtn.addEventListener('click', () => {
+            window.dashboard.addOrderPopupToBasket();
+        });
+    }
+});
+</script>
+
+
 </body>
 </html>
