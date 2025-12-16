@@ -1,5 +1,6 @@
 import requests
 import json
+import pandas as pd
 
 # --- CONFIG FOR KAVITA ---
 MOBILE = "+919227132387"
@@ -68,61 +69,45 @@ class KotakTimestampHunter:
             print(f"❌ Login Failed: {e}")
             return False
 
-    def hunt_for_timestamp(self):
-        print("\n" + "="*60)
-        print("🕵️  HUNTING FOR TIMESTAMP FIELD NAME IN ORDER BOOK")
+    def check_midcp_futures(self):
+        """Check if MIDCPNIFTY futures exist"""
+        print("\n🔍 CHECKING MIDCPNIFTY FUTURES")
         print("="*60)
-
-        try:
-            # --- FIX: CHANGED URL TO '/quick/user/orders' ---
-            url = f"{self.session['base_url']}/quick/user/orders"
+        
+        csv_path = r"C:\Users\Ketan\Desktop\kotak_master_live.csv"
+        df = pd.read_csv(csv_path)
+        
+        # Look for MIDCPNIFTY FUTURES
+        midcp_rows = df[df['pSymbolName'] == 'MIDCPNIFTY']
+        futures = midcp_rows[midcp_rows['pTrdSymbol'].astype(str).str.contains('FUT')]
+        
+        if not futures.empty:
+            print(f"✅ Found {len(futures)} MIDCPNIFTY futures")
+            for _, row in futures.head(3).iterrows():
+                print(f"  - {row['pTrdSymbol']}")
             
-            print(f"📡 Fetching from: {url}")
-            r = requests.get(url, headers=self.get_headers())
+            # Get first futures token
+            first_token = str(futures.iloc[0]['pSymbol']).strip()
+            print(f"\n📊 Fetching LTP for: {first_token}")
             
-            if r.status_code != 200:
-                print(f"❌ API Error: {r.status_code} - {r.text}")
-                return
-
-            data = r.json().get("data", [])
-
-            # 2. Check if Empty
-            if not data:
-                print("⚠️  YOUR ORDER BOOK IS EMPTY!")
-                print("   Please place at least one order (even a rejected one) so we can see the data structure.")
-                return
-
-            # 3. Analyze the First Order
-            first_order = data[0]
-            print(f"✅ Found {len(data)} orders. Analyzing the most recent one...\n")
+            url = f"{self.session['base_url']}/script-details/1.0/quotes/neosymbol/nse_fo|{first_token}"
+            r = requests.get(url, headers=self.get_headers(), timeout=3)
             
-            print(f"{'FIELD NAME (The Key)':<25} | {'VALUE (The Data)':<30}")
-            print("-" * 60)
-
-            # 4. Loop through every key and highlight time-related ones
-            for key, value in first_order.items():
-                # Check for keywords like time, date, tm, dt
-                is_time_related = any(x in key.lower() for x in ['time', 'date', 'tm', 'dt', 'ord'])
-                
-                icon = "⏰ " if is_time_related else "   "
-                
-                # Convert value to string and truncate if too long
-                val_str = str(value)
-                if len(val_str) > 30: val_str = val_str[:27] + "..."
-
-                print(f"{icon}{key:<22} | {val_str:<30}")
-
-            print("-" * 60)
-            print("\n👉 LOOK AT THE ROWS WITH THE ALARM CLOCK (⏰).")
-            print("   One of those names is what we need to put in your popup-script.js!")
-
-        except Exception as e:
-            print(f"❌ Error: {e}")
+            if r.status_code == 200:
+                data = r.json()
+                if isinstance(data, list) and len(data) > 0:
+                    print(f"✅ Futures LTP: {data[0].get('ltp', 'N/A')}")
+                else:
+                    print(f"Response: {data}")
+            else:
+                print(f"❌ Failed: {r.status_code}")
+        else:
+            print("❌ No MIDCPNIFTY futures found")
 
 def main():
     api = KotakTimestampHunter()
     if api.login():
-        api.hunt_for_timestamp()
+        api.check_midcp_futures()
 
 if __name__ == "__main__":
     main()

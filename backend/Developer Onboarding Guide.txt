@@ -1,0 +1,284 @@
+Developer Onboarding Guide
+Multi-Segment Options Trading App (NFO + BFO)
+
+Frontend + FastAPI Backend + Kotak API Integration
+
+📌 1. Project Overview
+
+This application is a full-stack Options Trading Dashboard that supports:
+
+NFO (NSE Derivatives) → NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY
+
+BFO (BSE Derivatives) → SENSEX, BANKEX
+
+Dynamic index + expiry loading
+
+Option chain display
+
+One-click order placement
+
+Correct routing of NSE vs BSE orders via Kotak APIs
+
+The project consists of:
+
+Component	Technology	Files
+Frontend	HTML, CSS, JS	index.html, dashboard.js, styles.css
+Backend	FastAPI (Python)	main.py, KotakNiftyAPI.py
+Data	CSV Masters	nfo_master.csv, bfo_master.csv
+🛠 2. Folder Structure
+project/
+│
+├── backend/
+│   ├── main.py
+│   ├── KotakNiftyAPI.py
+│   ├── session_cache.json
+│   ├── users.json
+│   ├── nfo_master.csv
+│   ├── bfo_master.csv
+│
+└── frontend/
+    ├── index.html
+    ├── dashboard.js
+    ├── styles.css
+
+⚙️ 3. Setup Instructions
+✅ Backend Setup (FastAPI)
+1. Install dependencies
+pip install fastapi uvicorn requests python-multipart
+
+2. Start backend server
+uvicorn main:app --reload --port 8000
+
+
+Backend will start at:
+
+http://localhost:8000
+
+3. Required files for backend to run:
+
+Kotak Master CSV files
+Containing symbol definitions for NFO/BFO
+(Your project uses local CSVs for lookup)
+
+session_cache.json
+Stores login sessions
+
+users.json
+Contains login credentials for Kotak API wrapper
+
+✅ Frontend Setup
+
+Open frontend/index.html in any browser
+
+Ensure backend is running
+
+The option chain will load automatically
+
+Toggle NFO/BFO from the dropdown
+
+Nothing else to install — frontend is static.
+
+🔌 4. How System Works
+
+The application follows a clean two-way flow:
+
+Frontend Flow
+1️⃣ Segment Toggle (NFO ↔ BFO)
+
+Triggers:
+
+POST /api/switch-segment
+
+
+Updates:
+
+Index dropdown
+
+Expiry dropdown
+
+Option-chain segment routing
+
+2️⃣ Index Dropdown
+
+Selecting an index calls:
+
+GET /api/expiries-v2?index=X&segment=S
+
+3️⃣ Expiry Dropdown
+
+Selecting expiry calls:
+
+GET /api/option-chain?index=X&expiry=Y&strikes=10&segment=S
+
+
+Option chain table updates every few seconds.
+
+4️⃣ One-Click Order
+
+When ON:
+
+No confirmation
+
+Auto-fetch correct lot size
+
+Immediately triggers /api/place-order
+
+When OFF:
+
+Order popup or confirmation appears
+
+Backend Flow
+1️⃣ /api/switch-segment
+
+Stores active segment in server memory:
+
+session.segment = "NFO" or "BFO"
+
+2️⃣ /api/expiries-v2
+
+Reads master CSV → returns list of dates per index.
+
+3️⃣ /api/option-chain
+
+Builds option chain by:
+
+Parsing SENSEX/NIFTY symbol formats
+
+Determining correct exchange API:
+
+nse_cm / nse_fo (NFO)
+
+bse_cm / bse_fo (BFO)
+
+Fetching quotes
+
+Returning chain structure
+
+4️⃣ /api/place-order
+
+This was a major fix:
+
+Backend sets:
+
+"es": "nse_fo" if segment == "NFO"
+"es": "bse_fo" if segment == "BFO"
+
+
+So orders reach correct exchange.
+
+🧠 5. Key Concepts Developers Must Know
+✔ Segment Awareness
+
+Everything in the system depends on correct segment routing:
+
+Segment	Exchange	Symbols	es Value
+NFO	NSE	NIFTY, BANKNIFTY	nse_fo
+BFO	BSE	SENSEX, BANKEX	bse_fo
+✔ Symbol Parsing
+
+Backend automatically parses:
+
+Weekly & monthly formats
+
+SENSEX’s special date codes
+
+FUT names
+
+CE/PE endings
+
+No manual formatting needed by frontend.
+
+✔ Expiry Filtering
+
+Frontend only displays future expiries.
+
+Backend returns all expiries, but frontend filters UI.
+
+✔ One-Click Mode Uses Lot-Size API
+GET /api/lot-size
+
+
+Ensures trades use correct contract size.
+
+🔒 6. Developer Do’s & Don’ts
+✔ DO:
+
+Use segment parameter on all API calls
+
+Always call /api/switch-segment when toggling NFO/BFO
+
+Keep symbol formats untouched; backend parses everything
+
+Handle network errors gracefully
+
+❌ DON’T:
+
+Hardcode lot sizes
+
+Hardcode index lists
+
+Call /api/option-chain before expiries load
+
+Skip sending segment when placing orders
+
+🧩 7. What to Modify if Developer Adds New Features
+Feature	File to Change	Notes
+Add new index (e.g., NIFTY FIN SERVICE)	dashboard.js index lists	Ensure backend CSV contains symbol
+Add new segment	backend switch-segment, place_order	Must map to correct "es"
+Custom order types	frontend placeConfirmedOrder	Must be supported by Kotak
+UI changes	index.html, styles.css	Pure frontend
+🎯 8. Quick Start Checklist
+
+A developer can verify system is working by checking:
+
+✅ NIFTY option chain loads
+✅ SENSEX option chain loads
+✅ Expiries show correctly for both
+✅ One-click order places immediately
+✅ SENSEX/BANKEX orders reach broker (BFO fix)
+❌ No “No Dates Found” after segment switching
+🏁 You're Ready to Share This Project
+
+This guide is everything a new developer needs:
+
+How the system works
+
+How to run it
+
+Where each piece lives
+
+How NFO/BFO routing behaves
+
+What the backend expects
+
+How One-Click mode works
+
+What to do and not to do
+
+ scheduleNextUpdate() {
+        // Temporary no-op to avoid errors; real logic can be added later
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+getOrderDetailsFromForm()
+
+calculateOrderSummary()
+

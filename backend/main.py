@@ -41,7 +41,7 @@ class KotakNiftyAPI:
         adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
         self.api_session.mount('https://', adapter)
         self.last_strike_range = {}
-        
+        print("📊 Checking what indices are available...")
     # === NEW: LOAD SESSION AND VALIDATE WITH NIFTY CHECK ===
     def load_session_from_disk(self):
         if os.path.exists(SESSION_FILE):
@@ -457,9 +457,37 @@ class KotakNiftyAPI:
             current_session = self.active_sessions.get(self.current_user)
             if not current_session: return {"success": False, "message": "Please Login First"}
 
+            # === FIX: Initialize spot variable here ===
+            spot = 0
+            spot_symbol = ""
+            
             # Index Logic
             if index == "BANKNIFTY":
                 df_filtered = df[df['pSymbolName'] == 'BANKNIFTY']; spot_symbol = "Nifty Bank"
+            elif index == "FINNIFTY":
+                df_filtered = df[df['pSymbolName'] == 'FINNIFTY']; spot_symbol = "Nifty Fin Service"
+            elif index == "MIDCPNIFTY":
+                df_filtered = df[df['pSymbolName'] == 'MIDCPNIFTY']
+                spot_symbol = "MIDCPNIFTY-FUT"
+                
+                # Fetch futures price for MIDCPNIFTY
+                try:
+                    futures_row = df_filtered[df_filtered['pTrdSymbol'].astype(str).str.contains('FUT')]
+                    if not futures_row.empty:
+                        futures_token = str(futures_row.iloc[0]['pSymbol']).strip()
+                        futures_url = f"{current_session['base_url']}/script-details/1.0/quotes/neosymbol/nse_fo|{futures_token}"
+                        
+                        r_fut = self.api_session.get(futures_url, headers=self.get_headers(), timeout=2)
+                        if r_fut.status_code == 200:
+                            data = r_fut.json()
+                            if isinstance(data, list) and len(data) > 0:
+                                spot = float(data[0].get('ltp', 0))
+                            elif isinstance(data, dict) and 'data' in data and data['data']:
+                                spot = float(data['data'][0].get('ltp', 0))
+                            
+                           
+                except Exception as e:
+                    print(f"⚠️ Could not fetch MIDCPNIFTY futures: {e}")
             elif index == "SENSEX":
                 df_filtered = df[df['pSymbolName'] == 'SENSEX']; spot_symbol = "SENSEX"
             elif index == "BANKEX":
@@ -478,18 +506,19 @@ class KotakNiftyAPI:
             if df_filtered.empty: 
                 return {"success": False, "message": f"No data found for {index} {expiry} (Seg: {segment})"}
             
-            # === 1. SPOT PRICE ===
-            exch_seg = "bse_cm" if segment == "BFO" else "nse_cm"
-            spot_url = f"{current_session['base_url']}/script-details/1.0/quotes/neosymbol/{exch_seg}|{spot_symbol}"
-            
-            try:
-                r_spot = self.api_session.get(spot_url, headers=self.get_headers(), timeout=2)
-                spot = 0
-                if r_spot.status_code == 200:
-                    d = r_spot.json()
-                    if isinstance(d, list): spot = float(d[0]['ltp'])
-                    elif 'data' in d: spot = float(d['data'][0]['ltp'])
-            except: spot = 0 
+            # === 1. SPOT PRICE (SKIP FOR MIDCPNIFTY - WE ALREADY HAVE FUTURES) ===
+            if index != "MIDCPNIFTY":  # ← FIX: Don't fetch spot for MIDCPNIFTY
+                exch_seg = "bse_cm" if segment == "BFO" else "nse_cm"
+                spot_url = f"{current_session['base_url']}/script-details/1.0/quotes/neosymbol/{exch_seg}|{spot_symbol}"
+                
+                try:
+                    r_spot = self.api_session.get(spot_url, headers=self.get_headers(), timeout=2)
+                    spot = 0
+                    if r_spot.status_code == 200:
+                        d = r_spot.json()
+                        if isinstance(d, list): spot = float(d[0]['ltp'])
+                        elif 'data' in d: spot = float(d['data'][0]['ltp'])
+                except: spot = 0 
             
             # Token Map Logic
             token_map = {}
@@ -535,9 +564,9 @@ class KotakNiftyAPI:
                 # Store for next time
                 self.last_strike_range[range_key] = selected_strikes
                
-
+            
             atm_display = min(all_strikes, key=lambda x: abs(x - spot)) if spot > 0 else 0
-
+            
             # Prepare Slugs
             slugs = []
             exch_fo = "bse_fo" if segment == "BFO" else "nse_fo"
@@ -598,7 +627,6 @@ class KotakNiftyAPI:
         except Exception as e:
             logger.error(f"Chain Error: {e}")
             return {"success": False, "message": str(e)}
-
 
 
     def get_positions(self) -> Dict:
@@ -780,8 +808,15 @@ class KotakNiftyAPI:
                 return {"success": False, "message": f"HTTP error {response.status_code}"}
             
             res_json = response.json()
-            if res_json.get("stat") not in ["Ok", "ok"]: 
-                return {"success": False, "message": res_json.get("emsg", "Order book failed")}
+            status = res_json.get("stat", "").lower()
+            if status not in ["ok", "okay", "success"]:
+                error_msg = res_json.get("emsg", "Order book failed").lower()
+    
+                # Check if it's "no orders" vs real error
+                if any(phrase in error_msg for phrase in ["no orders", "no data", "empty", "not found"]):
+                    return {"success": True, "orders": []}  # ✅ Return empty list, not error!
+                else:
+                    return {"success": False, "message": res_json.get("emsg", "Order book failed")}
 
             orders = res_json.get('data', [])
             enhanced_orders = []
@@ -798,7 +833,7 @@ class KotakNiftyAPI:
                     "symbol": order.get('trdSym'),
                     "transaction_type": order.get('trnsTp'),
                     "quantity": order.get('qty'),
-                    "price": order.get('prc'),
+                    "price": order.get('avgPrc') or order.get('prc'),
                     "order_type": order.get('ordTyp'),     # Usually 'ordTyp' or 'prcTp'
                     "product": order.get('prod'),
                     "status": our_status,
@@ -1260,20 +1295,66 @@ def portfolio_ltp_api(symbols: str = Query("")):
 @app.get("/api/index-quotes")
 def index_quotes():
     if not kotak_api.current_user: return {"error": "Not logged in"}
-    quotes_query = "nse_cm|Nifty 50,nse_cm|Nifty Bank,bse_cm|SENSEX/ltp"
+    
     try:
         base_url = kotak_api.active_sessions[kotak_api.current_user]["base_url"]
+        
+        # Get spot prices for all indices
+        quotes_query = "nse_cm|Nifty 50,nse_cm|Nifty Bank,nse_cm|Nifty Fin Service,bse_cm|SENSEX"
         response = requests.get(f"{base_url}/script-details/1.0/quotes/neosymbol/{quotes_query}", headers=kotak_api.get_headers())
-        if response.status_code != 200: return {"error": "Failed"}
-        data = response.json()
+        
         result = []
-        for d in data:
-            token = d.get("exchange_token") or d.get("display_symbol")
-            ltp = f"{float(d.get('ltp', 0)):.2f}"
-            result.append({"exchange_token": token, "ltp": ltp})
+        if response.status_code == 200:
+            data = response.json()
+            quotes_list = data if isinstance(data, list) else data.get('data', [])
+            
+            for d in quotes_list:
+                if isinstance(d, dict):
+                    token = d.get("exchange_token") or d.get("display_symbol")
+                    ltp = float(d.get('ltp', 0))
+                    
+                    # Map to display names
+                    display_name = ""
+                    if "Nifty 50" in str(token): display_name = "NIFTY 50"
+                    elif "Nifty Bank" in str(token): display_name = "BANK NIFTY"
+                    elif "Nifty Fin Service" in str(token): display_name = "FINNIFTY"
+                    elif "SENSEX" in str(token): display_name = "SENSEX"
+                    
+                    if display_name:
+                        result.append({"name": display_name, "ltp": f"{ltp:.2f}"})
+        
+        # Try to get MIDCPNIFTY futures price
+        try:
+            # Load CSV to find futures token
+            import pandas as pd
+            csv_path = r"C:\Users\Ketan\Desktop\kotak_master_live.csv"
+            if os.path.exists(csv_path):
+                df = pd.read_csv(csv_path)
+                midcp_futures = df[(df['pSymbolName'] == 'MIDCPNIFTY') & 
+                                   (df['pTrdSymbol'].astype(str).str.contains('FUT'))]
+                
+                if not midcp_futures.empty:
+                    futures_token = str(midcp_futures.iloc[0]['pSymbol']).strip()
+                    futures_url = f"{base_url}/script-details/1.0/quotes/neosymbol/nse_fo|{futures_token}"
+                    futures_response = requests.get(futures_url, headers=kotak_api.get_headers(), timeout=2)
+                    
+                    if futures_response.status_code == 200:
+                        futures_data = futures_response.json()
+                        ltp = 0
+                        if isinstance(futures_data, list) and len(futures_data) > 0:
+                            ltp = float(futures_data[0].get('ltp', 0))
+                        elif isinstance(futures_data, dict) and 'data' in futures_data:
+                            ltp = float(futures_data['data'][0].get('ltp', 0))
+                        
+                        result.append({"name": "MIDCPNIFTY", "ltp": f"{ltp:.2f}"})
+        except:
+            pass  # Skip if can't get futures price
+            
         return result
-    except: return []
-
+        
+    except Exception as e:
+        logger.error(f"Index quotes error: {e}")
+        return []
 # Keep this one ASYNC (Place Order)
 @app.post("/api/place-order")
 async def place_order_api(request: Request):
@@ -1339,6 +1420,7 @@ if os.path.exists(frontend_path): app.mount("/", StaticFiles(directory=frontend_
 
 if __name__ == "__main__":
     import uvicorn
+    
     logger.info("🚀 Server starting on http://localhost:8000")
     
     # Turn OFF access logs (the spam), keep error logs
