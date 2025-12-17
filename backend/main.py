@@ -235,18 +235,18 @@ class KotakNiftyAPI:
             return {"success": False, "message": str(e)}
     # === NEW: LOGOUT FUNCTION (BURNS THE TICKET) ===
     def logout(self):
-        # 1. Clear memory
-        self.active_sessions = {}
+        # 1. Only logout the current user
+        if self.current_user and self.current_user in self.active_sessions:
+            # Remove only this user's session
+            del self.active_sessions[self.current_user]
+            logger.info(f"✅ Logged out user: {self.current_user}")
+    
+        # 2. Reset current_user
         self.current_user = None
-        
-        # 2. Delete the file from the hard drive
-        if os.path.exists(SESSION_FILE):
-            try:
-                os.remove(SESSION_FILE)
-                logger.info("🗑️ Session file deleted from disk.")
-            except Exception as e:
-                logger.error(f"❌ Error deleting session file: {e}")
-        
+    
+        # 3. Update session file (don't delete, just save without this user)
+        self.save_session_to_disk()
+    
         return {"success": True, "message": "Logged out securely"}
     def switch_user(self, user_id: str):
         if user_id in self.active_sessions:
@@ -1361,6 +1361,11 @@ async def place_order_api(request: Request):
     data = await request.json()
 
     segment = data.get("segment", "NFO")  # default NFO if not sent
+    symbol = data.get("symbol", "") or ""
+
+    # 👇 NEW: force BFO for SENSEX / BANKEX
+    if symbol.startswith("SENSEX") or symbol.startswith("BANKEX"):
+        segment = "BFO"
 
     return kotak_api.place_order(
         data.get("symbol"),
