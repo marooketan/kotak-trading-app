@@ -522,6 +522,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!window.popupManager) window.popupManager = new PopupManager();
     window.popupManager.init();
 });
+
+// popup-script.js (Add this function block at the bottom of the file)
+
+function updateAllPopupStatuses(isLoggedIn) {
+    // This function runs when the login status changes (e.g., when you log out)
+    
+    const statusText = isLoggedIn ? 'Live Mode' : 'Demo Mode';
+    const statusColor = isLoggedIn ? '#27ae60' : '#e74c3c';
+    
+    // Looks for all elements in all popups that have the class 'popup-user-status'
+    const statusElements = document.querySelectorAll('.popup-user-status'); 
+
+    // Changes the text and color for all of them
+    statusElements.forEach(el => {
+        el.textContent = statusText;
+        el.style.color = statusColor;
+    });
+}
+
+
+
 // === One-Click big banner: inject & auto-show when One-Click is ON ===
 (function oneClickBannerModule() {
   // Create banner DOM (only once)
@@ -567,6 +588,7 @@ document.addEventListener('DOMContentLoaded', function() {
   return false;
 }
 
+
   // Show or hide depending on state and session dismissal
  function refreshBannerVisibility() {
   // If One-Click is ON, always show the banner and clear any prior session dismissal
@@ -600,5 +622,8 @@ document.addEventListener('DOMContentLoaded', function() {
   window.OneClickBanner = {
     show: () => { sessionStorage.removeItem('oneclick_banner_dismissed'); refreshBannerVisibility(); },
     hide: () => { banner.style.display = 'none'; sessionStorage.setItem('oneclick_banner_dismissed','1'); }
+
   };
 })();
+// Make function globally accessible
+window.updateAllPopupStatuses = updateAllPopupStatuses;

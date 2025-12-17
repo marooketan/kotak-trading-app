@@ -384,8 +384,9 @@ if (watchlistBtn) {
         const kStatus = document.getElementById('kotakStatus');
         if (kStatus) {
             kStatus.textContent = '(Live Mode)';
-            kStatus.style.color = '#27ae60';
+            kStatus.style.color = '#27ae60';    
         }
+           if (typeof updateAllPopupStatuses === 'function') updateAllPopupStatuses(true); 
     }
 
     showLoggedOutState() {
@@ -395,6 +396,7 @@ if (watchlistBtn) {
             kStatus.textContent = '(Demo Mode)';
             kStatus.style.color = '#e74c3c';
         }
+            if (typeof updateAllPopupStatuses === 'function') updateAllPopupStatuses(false);   
     }
 
     updateLoginBanner(isLoggedIn) {
@@ -575,27 +577,31 @@ addOrderPopupToBasket() {
     const symbol = document.getElementById('orderSymbol').value;
     const strike = document.getElementById('orderStrike').value;
     const optionType = document.getElementById('orderOptionType').value;
-    const qtyLots = parseInt(document.getElementById('orderQty').value, 10) || 1;
+    
+    // 🔑 NEW FIX: SAFELY CHECK BOTH POSSIBLE QUANTITY INPUT IDS
+    const orderQtyElement = document.getElementById('orderQty') || document.getElementById('headerOrderQty');
+    const qtyLots = parseInt(orderQtyElement?.value || '1', 10);
+    
     const priceType = document.getElementById('priceTypeSelect').value;
     const limitPrice = parseFloat(document.getElementById('limitPrice').value) || 0;
     const segment = this.currentSegment || 'NFO';
     const action = document.getElementById('actionBuy').classList.contains('buy-active') ? 'BUY' : 'SELL';
 
-    const price = (priceType === 'MARKET') ? null : limitPrice;
+  const price = (priceType === 'MARKET') ? null : limitPrice;
     const qty = qtyLots;  // per-lot; you can later convert to absolute if needed
 
     this.addToBasket({
-        action,
-        optionType,
-        strike,
-        price,
-        symbol,
-        segment,
+        action: action, // Ensure Action is passed
+        optionType: optionType,
+        strike: strike,
+        price: price,
+        symbol: symbol,
+        segment: segment,
         selected: true,
-        qty
+        // 🔑 THE FIX: USE THE CORRECT KEY 'quantity'
+        quantity: qty 
     });
 }
-
 
 // --- START of executeBasket() in dashboard.js ---
 
@@ -638,18 +644,28 @@ async executeBasket() {
         const allOrders = [...buyOrders, ...sellOrders];
         
         for (let index = 0; index < allOrders.length; index++) {
-            const item = allOrders[index];
+    const item = allOrders[index];
+
+    // 👇 NEW: decide segment once
+    if (!item.segment) {
+        if (item.symbol.includes('SENSEX') || item.symbol.includes('BANKEX')) {
+            item.segment = 'BFO';
+        } else {
+            item.segment = 'NFO';
+        }
+    }
+
+    // Small delay between orders (500ms gap)
+    if (index > 0) {
+        await sleep(500);
+    }
             
-            // Small delay between orders (500ms gap)
-            if (index > 0) {
-                await sleep(500);
-            }
-            
-            try {
-                // Get lot size
-                const response = await fetch(
-                    `/api/lot-size?symbol=${encodeURIComponent(item.symbol)}&segment=${item.segment || 'NFO'}`
-                );
+    try {
+        // Get lot size
+        const response = await fetch(
+            `/api/lot-size?symbol=${encodeURIComponent(item.symbol)}&segment=${item.segment}`
+        );
+
                 const lotData = await response.json();
                 const lotSize = lotData.success ? lotData.lot_size : 75;
                 
@@ -660,10 +676,12 @@ async executeBasket() {
                     optionType: item.optionType,
                     strike: item.strike,
                     price: item.price || 0,
-                    quantity: (item.qty || 1) * lotSize,
+                    quantity: (parseInt(item.qty) || 1) * lotSize,
+
                     product: 'NRML',
                     priceType: item.price ? 'LIMIT' : 'MARKET',
-                    segment: item.segment || 'NFO'
+                    segment: item.segment,
+
                 };
                 
                 // Create tracker order
@@ -701,7 +719,7 @@ async executeBasket() {
 
     placeConfirmedOrder(orderDetails, orderId) {  // ← ADDED orderId parameter
     console.log("🔄 Placing order:", orderDetails);
-    
+    console.log("🔍 DATA INSPECTOR - Sending Order Details:", orderDetails);
     // Disable buttons briefly to prevent double clicks
     const buttons = document.querySelectorAll('.buy-btn, .sell-btn');
     buttons.forEach(btn => btn.disabled = true);

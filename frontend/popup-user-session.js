@@ -21,25 +21,23 @@ PopupManager.prototype.getCurrentUser = function () {
 };
 
 PopupManager.prototype.isLiveMode = function () {
-    const kotakStatus = document.getElementById('kotakStatus');
-    return true; // Always show "Live"
+    const headerStatus = document.getElementById('headerLoginStatus');
+    return headerStatus && headerStatus.textContent.includes('Login Successful');
 };
-
 PopupManager.prototype.addUserToHeader = function (windowElement, userName, isLiveMode) {
     const header = windowElement.querySelector('.window-header');
     const existingUserSpan = header.querySelector('.user-display');
     
+    // Create or update user display (only username, no mode badge)
     const userDisplay = existingUserSpan || document.createElement('span');
     userDisplay.className = 'user-display';
-    userDisplay.innerHTML = ` • ${userName} <span class="mode-badge">${isLiveMode ? 'Live' : 'Demo'}</span>`;
+    userDisplay.innerHTML = ` • ${userName}`; // ONLY username, no mode badge
     
     if (!existingUserSpan) {
         const title = header.querySelector('.window-title');
         title.appendChild(userDisplay);
     }
-};
-
-PopupManager.prototype.fetchSessionStatus = async function () {
+};PopupManager.prototype.fetchSessionStatus = async function () {
     try {
         const response = await fetch('/api/session-status');
         const data = await response.json();
