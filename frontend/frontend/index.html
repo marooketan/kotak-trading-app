@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kotak Options Trader</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./popup-styles.css">
+    <style>
+         /* Dark Mode Colors */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #2c3e50;
+    --table-bg: #ffffff;
+    --header-bg: #2c3e50;
+    --border-color: #ddd;
+    --row-hover: #f5f5f5;
+}
+
+[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --table-bg: #2d2d2d;
+    --header-bg: #1a1a1a;
+    --border-color: #444;
+    --row-hover: #333;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.container {
+    background-color: var(--bg-color);
+}
+
+table {
+    background-color: var(--table-bg);
+    color: var(--text-color);
+}
+
+table th {
+    background-color: var(--header-bg) !important;
+    color: white !important;
+}
+
+table tr:hover {
+    background-color: var(--row-hover);
+}
+
+.popup-window {
+    background-color: var(--table-bg);
+    border-color: var(--border-color);
+}
+        /* === 1. POPUP WINDOW BASICS === */
+        .popup-window {
+            display: none;
+            position: fixed;
+            width: 450px;
+            height: 500px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid #ddd;
+            z-index: 1000;
+            resize: both;
+            overflow: hidden;
+            min-width: 350px;
+            min-height: 300px;
+            max-width: 90vw;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+           #indexPricesWindow {
+           min-height: 150px;
+        }
+ 
+
+        .window-header {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 15px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            border-radius: 8px 8px 0 0;
+            flex-shrink: 0;
+        }
+
+        .window-content {
+            padding: 15px;
+            padding-bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* === 2. SCROLLABLE TABLE AREA === */
+        .table-scroll-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border: 1px solid #eee;
+            position: relative;
+        }
+
+        /* === 3. TABLE STYLES (HEADERS FIX) === */
+        #orderHistoryWindow .orders-table,
+        #portfolioWindow .portfolio-table {
+            table-layout: fixed;
+            width: 100%;
+            border-collapse: separate; 
+            border-spacing: 0;
+        }
+
+        #orderHistoryWindow .orders-table th,
+        #orderHistoryWindow .orders-table td,
+        #portfolioWindow .portfolio-table th,
+        #portfolioWindow .portfolio-table td {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 6px 8px;
+            border-bottom: 1px solid #eee;
+            text-align: center; /* Center align all cells */
+        }
+
+        /* STICKY DARK HEADERS */
+        #orderHistoryWindow .orders-table th,
+        #watchlistWindow table th,
+        #portfolioWindow .portfolio-table th {
+            background-color: #2c3e50 !important; /* Force Dark Blue */
+            color: white !important;
+            font-weight: 600;
+            border-right: 1px solid rgba(255, 255, 255, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        #orderHistoryWindow .orders-table th:last-child,
+        #portfolioWindow .portfolio-table th:last-child {
+            border-right: none;
+        }
+
+        /* Order ID Column */
+        td[data-column="order_id"] {
+            font-size: 11px;
+            color: #7f8c8d;
+            font-family: monospace;
+        }
+
+        /* Checkbox Column Fix */
+        #portfolioWindow .portfolio-table th:first-child,
+        #portfolioWindow .portfolio-table td:first-child {
+            width: 30px;
+            padding: 0;
+        }
+
+        /* === 4. BUTTON STYLES (RESTORE COLORS) === */
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+            border: 1px solid #2980b9;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-primary:hover { background-color: #2980b9; }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+            border: 1px solid #7f8c8d;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover { background-color: #7f8c8d; }
+
+        .btn-cancel {
+            background-color: #e74c3c;
+            color: white;
+            border: 1px solid #c0392b;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        /* === 5. BUY/SELL ACTIVE STATES (THE NEW FIX) === */
+        .action-btn {
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            background: #f0f0f0;
+            cursor: pointer;
+            font-weight: bold;
+            flex: 1;
+            transition: all 0.2s;
+            opacity: 0.6;
+        }
+        
+        /* Force Green for Buy */
+        .buy-active {
+            background-color: #27ae60 !important;
+            color: white !important;
+            border-color: #219150 !important;
+            opacity: 1;
+        }
+        
+        /* Force Red for Sell */
+        .sell-active {
+            background-color: #e74c3c !important;
+            color: white !important;
+            border-color: #c0392b !important;
+            opacity: 1;
+        }
+
+        /* === 6. UTILS === */
+        .resize-handle {
+            position: absolute;
+            top: 0; right: 0; width: 5px; height: 100%;
+            cursor: col-resize; z-index: 20;
+            background: rgba(0,0,0,0.1);
+        }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .form-group { flex: 1; display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+        .form-input, .form-select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+        .order-summary { background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+        .summary-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+        .form-buttons { display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* Loading/Empty States */
+        .qty-help { font-size: 11px; color: #7f8c8d; margin-top: 2px; }
+         /* === Basket Delete column fix === */
+#basketWindow th.delete-col,
+#basketWindow td.delete-col {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    text-align: center;
+}
+
+#basketWindow td.delete-col button {
+    width: 22px;
+    height: 22px;
+    line-height: 20px;
+    padding: 0;
+    font-size: 14px;
+}
+/* Force fixed layout for Basket table */
+#basketWindow table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+
+     /* === PORTFOLIO GROUP HEADERS === */
+        .group-header {
+            background-color: #dfe6e9; /* Light Gray */
+            color: #2d3436;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .group-header td {
+            text-align: left !important; /* Align text to the left */
+            padding: 8px 15px !important;
+            border-bottom: 1px solid #b2bec3 !important;
+            border-top: 1px solid #b2bec3;
+        }
+        /* Fix alignment for the group P&L span */
+        .group-pnl-display {
+            float: right;
+            margin-right: 20px;
+        }
+                   
+
+    </style>
+    </head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Kotak Options Trader</h1>
+            <div class="controls">
+                <button id="toggleMode">One-Click: OFF</button>
+                
+                <div class="filter-group">
+                    <select id="marketType">
+                        <option value="NFO">NFO</option>
+                        <option value="BFO">BFO</option>
+                    </select>
+                    
+                    <select id="indexSelect">
+                        <option value="NIFTY">NIFTY</option>
+                        <option value="BANKNIFTY">BANKNIFTY</option>
+                        <option value="FINNIFTY">FINNIFTY</option>
+                        <option value="MIDCPNIFTY">MIDCPNIFTY</option>
+                    </select>
+                    
+                    <select id="expirySelect">
+                        <option value="">Loading expiries...</option>
+                    </select>
+                    
+                    <select id="strikeCount">
+                        <option value="5">5 Strikes (±5)</option>
+                        <option value="10">10 Strikes (±10)</option>
+                        <option value="15">15 Strikes (±15)</option>
+                        <option value="20">20 Strikes (±20)</option>
+                        <option value="25" selected>25 Strikes (±25)</option>
+                        <option value="30">30 Strikes (±30)</option>
+                        <option value="40">40 Strikes (±40)</option>
+                        <option value="50">50 Strikes (±50)</option>
+                        <option value="all">All Strikes</option>
+                    </select>
+                </div>
+                
+                <select id="productType">
+                    <option value="NRML">NRML</option>
+                    <option value="MIS">MIS</option>
+                    <option value="CNC">CNC</option>
+                </select>
+                
+                <input type="number" id="headerOrderQty" value="1" min="1" max="999" 
+                       style="width: 45px; padding: 6px 8px; font-size: 12px; text-align: center;">
+                <button id="refreshBtn" title="Refresh" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🔄</button>
+                <button onclick="showPortfolioWindow()" title="Portfolio" style="padding: 4px 8px; font-size: 20px; line-height: 1;">📊</button>
+                <button onclick="showBasketWindow()" title="Basket"
+        style="padding: 4px 8px; font-size: 20px; line-height: 1;">🧺</button>
+
+                <button onclick="showOrderHistoryWindow()" title="Orders" style="padding: 4px 8px; font-size: 20px; line-height: 1;">📋</button>
+                <button onclick="showIndexPricesWindow()" title="Indices" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🧮</button>
+                <button onclick="showSettingsWindow()" title="Settings" style="padding: 4px 8px; font-size: 20px; line-height: 1;">⚙️</button>
+                <button id="darkModeToggle" title="Toggle Dark Mode" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🌙</button>
+                <button id="watchlistBtn" title="Watchlist" style="padding: 4px 8px; font-size: 20px; line-height: 1;">👁️</button>
+                <button onclick="if(window.popupAlerts) popupAlerts.open()" title="Alerts" style="padding: 4px 8px; font-size: 20px; line-height: 1; cursor: pointer;">🔔</button>
+                <!-- TOTP & Login Controls -->
+              <input type="text" id="totpInput" placeholder="TOTP" maxlength="6" 
+       style="width: 90px; padding: 6px 8px; font-size: 13px; border: 1px solid #bdc3c7; border-radius: 4px; margin-left: 10px;">
+<button id="headerLogoutBtn" style="padding: 6px 12px; font-size: 13px; background: #e74c3c; color: white; border: none; border-radius: 4px;">Logout</button>
+<span id="headerLoginStatus" style="font-size: 13px; color: #7f8c8d; margin: 0 8px; font-weight: bold;">Enter TOTP to Login</span>
+<select id="userSelect" style="padding: 6px 10px; font-size: 13px; border: 1px solid #bdc3c7; border-radius: 4px;">
+    <option value="ketan">👤 Ketan</option>
+    <option value="kavita">👤 Kavita</option>
+</select>            </div>
+        </header>
+               
+       
+       
+
+        <div class="option-chain-container"> 
+           
+            <div class="option-chain">
+                <div id="loading">Loading option chain...</div>
+                <table id="optionTable" style="display: none;">
+                    <thead>
+                        <tr>
+                           <th>Buy/Sell CE</th>
+                           <th>Call Bid</th>
+                           <th>Call Ask</th>
+                           <th>Call LTP</th>
+                           <th>Strike</th>
+                           <th>Put LTP</th>
+                           <th>Put Bid</th>
+                           <th>Put Ask</th>
+                           <th>Buy/Sell PE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="optionData">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+         <div class="resize-handle"></div>
+    </div>
+
+    <div id="portfolioWindow" class="popup-window" style="width: 800px; min-width: 750px; height: 500px;">
+        <div class="window-header">
+            <div class="window-title">💼 Portfolio P&L (Live F&O Positions)
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="portfolio-summary-bar" style="display: flex; justify-content: space-between; padding: 10px; margin-bottom: 10px; background: #f4f4f4; border-radius: 6px; flex-shrink: 0;">
+                <div class="summary-item" style="text-align: center;">
+                    <span class="label" style="font-size: 12px; color: #777;">TOTAL P&L:</span>
+                    <span id="portfolioTotalPnl" class="value" style="font-size: 18px; font-weight: bold;">-</span>
+                </div>
+                <div class="summary-item" style="text-align: center;">
+                    <span class="label" style="font-size: 12px; color: #777;">MTM P&L:</span>
+                    <span id="portfolioMtmPnl" class="value" style="font-size: 18px; font-weight: bold;">-</span>
+                </div>
+                <div class="summary-item" style="text-align: center;">
+                    <span class="label" style="font-size: 12px; color: #777;">REALIZED:</span>
+                    <span id="portfolioRealizedPnl" class="value" style="font-size: 18px; font-weight: bold;">-</span>
+                </div>
+            </div>
+
+            <div class="portfolio-action-bar" style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; flex-shrink: 0;">
+                
+                <label style="margin-right: auto; display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 600; font-size: 13px; color: #2c3e50;">
+                    <input type="checkbox" id="dayWiseFilter"> 📅 Today's Trades Only
+                </label>
+                <button id="squareOffCheckedBtn" class="btn-cancel" disabled 
+                        style="padding: 8px 15px; font-weight: 900; font-size: 13px; text-transform: uppercase; border-width: 2px; letter-spacing: 0.5px;">
+              ❌ Square Off Checked
+               </button>
+
+               <!-- NEW: Exact Quantity Square Off -->
+               <div style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
+                   <input type="number" id="exactQtyInput" 
+                          style="width: 80px; padding: 6px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 12px;"
+                          placeholder="Qty" min="1" value="1">
+              <button id="squareOffExactBtn" class="btn-cancel" disabled
+                         style="padding: 8px 15px; font-weight: 900; font-size: 13px; text-transform: uppercase; border-width: 2px; letter-spacing: 0.5px;">
+              🎯 Square Off Exact
+              </button>
+        </div>
+                
+                <button id="portfolioRefreshBtn" class="btn-primary" style="padding: 8px 15px;">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div class="table-scroll-wrapper">
+                <table class="portfolio-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;"><input type="checkbox" id="selectAllPositions"></th>
+                            <th class="resizable" data-column="symbol">Symbol</th>
+                            <th class="resizable" data-column="type">Type</th>
+                            <th class="resizable sortable" data-column="netQty" data-sort="none">
+                                Net Qty <span class="sort-icon"></span>
+                            </th>
+                            <th class="resizable" data-column="avgPrice">Avg Price</th>
+                            <th class="resizable sortable" data-column="ltp" data-sort="none">
+                                LTP <span class="sort-icon"></span>
+                            </th>
+
+                            <th class="resizable sortable" data-column="pnl" data-sort="none">
+                                MTM P&L <span class="sort-icon"></span>
+                            </th>   
+                            <th class="resizable" data-column="action">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolioTableBody">
+                        <tr><td colspan="8" style="text-align: center;">No open F&O positions.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <div id="orderHistoryWindow" class="popup-window" style="width: 800px; height: 500px;">
+        <div class="window-header">
+            <div class="window-title">📋 Order History
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="filter-tabs" style="flex-shrink: 0; margin-bottom: 10px;">
+                <button class="filter-tab active" data-filter="all">All</button>
+                <button class="filter-tab" data-filter="completed">Completed</button>
+                <button class="filter-tab" data-filter="pending">Pending</button>
+                <button class="filter-tab" data-filter="cancelled">Cancelled</button>
+                <button class="refresh-orders" title="Refresh Orders">🔄 Refresh</button>
+            </div>
+
+            <div class="table-scroll-wrapper">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th data-column="time" class="resizable">Time</th>
+                            <th data-column="order_id" class="resizable">Order ID</th>
+                            <th data-column="symbol" class="resizable">Symbol</th>
+                            <th data-column="side" class="resizable">Side</th>
+                            <th data-column="quantity" class="resizable">Qty</th>
+                            <th data-column="price" class="resizable">Price</th>
+                            <th data-column="status" class="resizable">Status</th>
+                            <th data-column="actions" class="resizable">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                        <tr><td colspan="8" style="text-align: center;">Loading orders...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <div id="indexPricesWindow" class="popup-window">
+    <div class="window-header">
+        <div class="window-title">📊 Indices
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize">-</button>
+            <button class="close-btn" title="Close">×</button>
+        </div>
+    </div>
+    <div class="window-content">
+        <div class="index-prices-container">
+            <div class="index-item">
+                <strong>NIFTY 50:</strong>
+                <span id="popupNiftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>BANK NIFTY:</strong>
+                <span id="popupBankniftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>FINNIFTY:</strong>
+                <span id="popupFinniftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>MIDCP NIFTY:</strong>
+                <span id="popupMidcpniftyPrice" class="index-price">-</span>
+            </div>
+            <div class="index-item">
+                <strong>SENSEX:</strong>
+                <span id="popupSensexPrice" class="index-price">-</span>
+            </div>
+        </div>
+    </div>
+    <div class="resize-handle"></div>
+</div>
+
+    <div id="orderEntryWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📝 Place Order
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="order-form">
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <input type="text" id="orderSymbol" class="form-input" readonly>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Strike</label>
+                        <input type="text" id="orderStrike" class="form-input" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <input type="text" id="orderOptionType" class="form-input" readonly>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="actionBuy" class="action-btn buy-active">BUY</button>
+                    <button id="actionSell" class="action-btn">SELL</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Quantity (Lots)</label>
+                    <input type="number" id="orderQty" class="form-input" value="1" min="1">
+                    <div class="qty-help">🔄 Fetching lot size...</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select id="orderTypeSelect" class="form-select">
+                            <option value="NRML">NRML</option>
+                            <option value="MIS">MIS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price Type</label>
+                        <select id="priceTypeSelect" class="form-select">
+                            <option value="MARKET">MARKET</option>
+                            <option value="LIMIT">LIMIT</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" id="limitPriceGroup" style="display: none;">
+                    <label>Limit Price</label>
+                    <input type="number" id="limitPrice" class="form-input" step="0.05" value="0">
+                </div>
+
+                <div class="order-summary">
+                    <div class="summary-row">
+                        <span>Total Quantity:</span>
+                        <span id="totalQty">50</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Estimated Amount:</span>
+                        <span id="estimatedAmount">₹0.00</span>
+                    </div>
+                </div>
+
+                <div class="form-buttons">
+                    <button id="cancelOrderBtn" class="btn-cancel">Cancel</button>
+                    <button id="btn-order-to-alert" class="btn-secondary" style="background: #ffc107; color: black; font-weight: bold; margin-right: 5px;" title="Create Alert">🔔</button>
+                    <button id="addToBasketBtn" class="btn-secondary">Add to Basket</button>
+                    <button id="submitOrderBtn" class="btn-primary">Place Order</button>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <div id="settingsWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">⚙️ Popup Settings
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="settings-form">
+                <div class="form-group">
+                    <label>Font Size</label>
+                    <input type="range" id="fontSizeSlider" min="10" max="20" value="14" class="form-slider">
+                    <span id="fontSizeValue">14px</span>
+                </div>
+                
+                <div class="form-group">
+                    <label>Font Color</label>
+                    <input type="color" id="fontColorPicker" value="#2c3e50" class="form-color">
+                </div>
+                
+                <div class="form-group">
+                    <label>Header Color</label>
+                    <input type="color" id="headerColorPicker" value="#34495e" class="form-color">
+                </div>
+                
+                <div class="form-buttons">
+                    <button id="resetSettingsBtn" class="btn-secondary">Reset to Default</button>
+                    <button id="applySettingsBtn" class="btn-primary">Apply Changes</button>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+    <div id="watchlistWindow" class="popup-window" style="display:none; width: 600px; height: 400px;">
+        <div class="window-header">
+            <div class="window-title">📜 Watchlist
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        
+        <div class="window-content">
+             <div class="watchlist-add-row" style="margin-bottom: 10px; display: flex; gap: 5px; align-items: center;">
+                
+                <select id="wlSegmentSelect" class="form-select" style="width:85px; padding: 4px;">
+                    <option value="NFO">NFO</option>
+                    <option value="BFO">BFO</option>
+                </select>
+
+                <select id="wlIndexSelect" class="form-select" style="width:165px; padding: 4px;">
+                    <option value="">Index</option>
+                </select>
+
+                <select id="wlExpirySelect" class="form-select" style="width:115px; padding: 4px;">
+                    <option value="">Expiry</option>
+                </select>
+
+                <select id="wlOptionTypeSelect" class="form-select" style="width:75px; padding: 4px;">
+                    <option value="CE">CE</option>
+                    <option value="PE">PE</option>
+                </select>
+
+                <select id="wlStrikeSelect" class="form-select" style="width: 160px; padding: 4px;">
+                    <option value="">Strike</option>
+                </select>
+
+                <button id="wlAddBtn" class="btn-primary" style="padding: 4px 12px;">Add</button>
+            </div>
+            
+            <div class="table-scroll-wrapper">
+                <table id="watchlistTable" class="orders-table"> <thead>
+                        <tr>
+                            <th>Seg</th>
+                            <th>Index</th>
+                            <th>Expiry</th>
+                            <th>Type</th>
+                            <th>Strike</th>
+                            <th>LTP</th>
+                            <th>Buy</th>
+                            <th>Sell</th>
+                            <th>Basket</th>
+                            <th>Del</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+        
+    </div>
+      </div>
+       <!-- Alert Popup Window -->
+<div id="alertWindow" class="popup-window" style="display: none; width: 400px; position: fixed; top: 150px; left: 40%; z-index: 9999;">
+    <div class="window-header">
+        <div class="window-title">🔔 Price Alerts
+            <span class="status-badge popup-user-status">Live</span>
+        </div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize">-</button>
+            <button class="close-btn" title="Close">×</button>
+        </div>
+    </div>
+    
+    <div class="window-content" style="padding: 10px;">
+        
+        <div style="background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #3e3e42; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span id="alert-active-symbol" style="color: #4da6ff; font-weight: bold; font-size: 14px;">No Symbol Selected</span>
+                <span style="color: #ccc;">LTP: <span id="alert-live-ltp" style="color: white; font-weight: bold;">0.00</span></span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+            <select id="alert-condition" class="form-select" style="width: 40%; padding: 6px; background: #1e1e1e; color: white; border: 1px solid #444;">
+                <option value="GREATER">Higher Than (>)</option>
+                <option value="LESS">Lower Than (<)</option>
+            </select>
+            
+            <input type="number" id="alert-target-price" placeholder="Target Price" class="form-control" style="width: 35%; padding: 6px; background: #1e1e1e; color: white; border: 1px solid #444;">
+            
+            <button id="btn-set-alert" style="width: 25%; background: #007acc; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">Set 🔔</button>
+        </div>
+        
+        <hr style="border-color: #333; margin-bottom: 10px;">
+        
+        <div class="table-scroll-wrapper" style="height: 250px; overflow-y: auto; background: #1e1e1e;">
+            <table id="alertTable" class="orders-table" style="width: 100%;">
+                <thead style="position: sticky; top: 0; background: #2d2d30;">
+                    <tr>
+                        <th style="padding: 5px;">Symbol</th>
+                        <th style="padding: 5px;">LTP</th>
+                        <th style="padding: 5px;">Cond</th>
+                        <th style="padding: 5px;">Target</th>
+                        <th style="padding: 5px;">X</th>
+                    </tr>
+                </thead>
+                <tbody id="alert-list-body">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+    
+    <div id="basketWindow" class="popup-window" style="display:none; width: 500px; height: 400px;">
+    <div class="window-header">
+        <div class="window-title">🧺 Basket
+    <span class="status-badge popup-user-status">Demo Mode</span>
+</div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize">-</button>
+            <button class="close-btn" title="Close"
+        onclick="this.closest('.popup-window').style.display='none'">×</button>
+
+        </div>
+    </div>
+
+    <div class="window-content">
+
+    <!-- Scrollable basket area -->
+    <div class="window-content" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+
+
+    <!-- Scrollable basket table -->
+    <div id="basketContent" style="
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+    ">
+        Basket is empty
+    </div>
+
+    <!-- Fixed footer buttons -->
+    <div style="
+        padding-top: 10px;
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        flex-shrink: 0;
+        background: white;
+        border-top: 1px solid #ddd;
+    ">
+        <button onclick="clearBasket()" class="btn-secondary">
+            🗑️ Clear Basket
+        </button>
+
+        <button id="executeBasketBtn"
+                onclick="executeBasketFromUI()"
+                class="btn-primary">
+            ▶ Execute Basket
+        </button>
+    </div>
+
+</div>
+
+
+</div>
+
+
+
+    <div class="resize-handle"></div>
+</div>
+
+    <script src="./storage-manager.js"></script>
+    <script src="./popup-script.js"></script>
+    <script src="./popup-user-session.js"></script>
+    <script src="./popup-portfolio.js"></script>
+    <script src="./popup-orderhistory.js"></script>
+    <script src="./popup-orderentry.js"></script>
+    <script src="./order-tracker.js"></script> 
+    <script src="./popup-watchlist.js"></script>
+    <script src="./dashboard-market-data.js"></script>
+    <script src="./dashboard-ordering.js"></script>
+    <script src="./dashboard-optionchain.js"></script>
+    <script src="user-activity-manager.js"></script>
+    <script src="watchlist-manager.js"></script>
+    <script src="optionchain-ui-controller.js"></script>
+    <script src="alert-manager.js"></script> 
+    <script src="popup-alerts.js"></script>
+    <script src="./dashboard.js"></script>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const appContainer = document.querySelector('.container');
+        const appHeader = document.querySelector('header');
+        const resizeHandle = document.querySelector('.container .resize-handle');
+
+        // Variables
+        let isDragging = false;
+        let isResizing = false;
+        let startX, startY, startLeft, startTop, startWidth, startHeight;
+
+        // 1. LOAD saved Settings
+        const savedSettings = localStorage.getItem('mainAppState');
+        if (savedSettings) {
+            const state = JSON.parse(savedSettings);
+            if (state.top) appContainer.style.top = state.top;
+            if (state.left) appContainer.style.left = state.left;
+            if (state.width) appContainer.style.width = state.width;
+            if (state.height) appContainer.style.height = state.height;
+        }
+
+        // --- DRAG LOGIC ---
+        appHeader.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button') || e.target.closest('select') || e.target.closest('input')) return;
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            const rect = appContainer.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            
+            appHeader.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        // --- RESIZE LOGIC ---
+        if (resizeHandle) {
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                const rect = appContainer.getBoundingClientRect();
+                startWidth = rect.width;
+                startHeight = rect.height;
+                
+                e.stopPropagation();
+                e.preventDefault();
+            });
+        }
+
+        // --- GLOBAL MOUSE MOVEMENT ---
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                appContainer.style.left = `${startLeft + dx}px`;
+                appContainer.style.top = `${startTop + dy}px`;
+            } 
+            else if (isResizing) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                appContainer.style.width = `${startWidth + dx}px`;
+                appContainer.style.height = `${startHeight + dy}px`;
+            }
+        });
+
+        // --- SAVE ON MOUSE UP ---
+        document.addEventListener('mouseup', () => {
+            if (isDragging || isResizing) {
+                const state = {
+                    top: appContainer.style.top,
+                    left: appContainer.style.left,
+                    width: appContainer.style.width,
+                    height: appContainer.style.height
+                };
+                localStorage.setItem('mainAppState', JSON.stringify(state));
+            }
+            isDragging = false;
+            isResizing = false;
+            appHeader.style.cursor = 'move';
+        });
+    });
+</script>
+<!-- =========================================== -->
+<!-- 🍕 PIZZA TRACKER STATUS PANEL (MOVABLE) -->
+<!-- =========================================== -->
+<div id="orderStatusPanel" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    background: white;
+    border: 2px solid #3498db;
+    border-radius: 10px;
+    padding: 15px;
+    max-height: 500px;
+    overflow-y: auto;
+    z-index: 999;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    cursor: move;
+    resize: both;
+    overflow: auto;
+    min-width: 300px;
+    min-height: 150px;
+">
+    <div style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #eee;
+    ">
+        <h4 style="margin: 0; color: #2c3e50; font-size: 14px;">🍕 Active Orders (<span id="orderCount">0</span>)</h4>
+        <div>
+            <button id="minimizeTracker" style="
+                background: #95a5a6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 3px 10px;
+                cursor: pointer;
+                font-size: 12px;
+                margin-right: 5px;
+            " title="Minimize">_</button>
+            <button id="closeTracker" style="
+                background: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 3px 10px;
+                cursor: pointer;
+                font-size: 12px;
+            " title="Close">×</button>
+        </div>
+    </div>
+    
+    <div id="activeOrdersList">
+        <div style="color: #7f8c8d; text-align: center; padding: 15px;">
+            No active orders
+        </div>
+    </div>
+    
+    <div style="
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+        font-size: 11px;
+        color: #7f8c8d;
+        text-align: center;
+    ">
+        🍕 Drag to move • Drag corner to resize
+    </div>
+        <!-- RESIZE HANDLE -->
+    <div id="pizzaResizeHandle" 
+     style="position: absolute; bottom: 5px; right: 5px; width: 20px; height: 20px; cursor: nwse-resize; background: #3498db; border-radius: 3px; z-index: 1000;"></div>
+
+</div>
+
+
+<script>
+// 🔥 Real-time Pizza UI renderer
+function renderActiveOrders(orders) {
+    const list = document.getElementById("activeOrdersList");
+    const count = document.getElementById("orderCount");
+    if (!list) return;
+
+    count.textContent = orders.length;
+
+    if (orders.length === 0) {
+        list.innerHTML = `
+            <div style="color: #7f8c8d; text-align: center; padding: 15px;">
+                No active orders
+            </div>`;
+        return;
+    }
+
+    list.innerHTML = orders.map(order => `
+        <div style="
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 5px solid ${getStateColor(order.state)};
+            background: #f9f9f9;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div style="flex:1;">
+                    <strong style="color:#2c3e50; font-size:14px; display:block; margin-bottom:3px;">
+                        ${order.details.symbol}
+                    </strong>
+                    <div style="color:#555; font-size:12px; margin-bottom:2px;">
+                        ${order.details.action} • ${order.details.optionType || ''} • ${order.details.strike || ''}
+                    </div>
+                    <div style="color:#777; font-size:11px;">
+                        <span style="background:#e0e0e0; padding:2px 5px; border-radius:3px; margin-right:5px;">
+                            ${order.details.priceType || 'LIMIT'}
+                        </span>
+                        <span>${timeAgo(order.timestamps[order.state.toLowerCase()])}</span>
+                    </div>
+                </div>
+
+                <span style="
+                    background:${getStateColor(order.state)};
+                    color:white;
+                    padding:3px 8px;
+                    border-radius:12px;
+                    font-size:11px;
+                    font-weight:bold;
+                    white-space:nowrap;
+                ">
+                    ${order.state}
+                </span>
+            </div>
+        </div>
+    `).join('');
+}
+</script>
+
+<script>
+// Pizza Tracker Functions
+function getStateColor(state) {
+    const colors = {
+        'PENDING': '#f39c12',    // Orange
+        'SENT': '#3498db',       // Blue
+        'CONFIRMED': '#2ecc71',  // Green
+        'FILLED': '#27ae60',     // Dark Green
+        'REJECTED': '#e74c3c',   // Red
+        'CANCELLED': '#95a5a6'   // Gray
+    };
+    return colors[state] || '#000000';
+}
+
+function timeAgo(timestamp) {
+    if (!timestamp) return 'just now';
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours/24)}d ago`;
+}
+
+// Draggable Panel Code
+let isDraggingPanel = false;
+let panelStartX, panelStartY, panelStartLeft, panelStartTop;
+const panel = document.getElementById('orderStatusPanel');
+const panelHeader = panel;
+
+panelHeader.addEventListener('mousedown', (e) => {
+    // 1) Don't drag when clicking buttons
+    if (e.target.tagName === 'BUTTON') return;
+
+    // 2) Don't drag when clicking the resize handle
+    if (e.target.id === 'pizzaResizeHandle') return;
+
+    // 3) Only drag if click is in TOP 40px of the panel
+    const rect = panel.getBoundingClientRect();
+    const clickOffsetY = e.clientY - rect.top;
+    if (clickOffsetY > 40) return;
+
+    isDraggingPanel = true;
+    panelStartX = e.clientX;
+    panelStartY = e.clientY;
+
+    panelStartLeft = rect.left;
+    panelStartTop = rect.top;
+    
+    panel.style.cursor = 'grabbing';
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isDraggingPanel) return;
+    
+    const dx = e.clientX - panelStartX;
+    const dy = e.clientY - panelStartY;
+    
+    panel.style.left = `${panelStartLeft + dx}px`;
+    panel.style.top = `${panelStartTop + dy}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+});
+
+document.addEventListener('mouseup', () => {
+    if (isDraggingPanel) {
+        isDraggingPanel = false;
+        panel.style.cursor = 'move';
+        
+        // Save position
+        localStorage.setItem('pizzaPanelPos', JSON.stringify({
+            left: panel.style.left,
+            top: panel.style.top
+        }));
+    }
+});
+
+// Load saved position
+const savedPos = localStorage.getItem('pizzaPanelPos');
+if (savedPos) {
+    const pos = JSON.parse(savedPos);
+    panel.style.left = pos.left;
+    panel.style.top = pos.top;
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+}
+// Auto-refresh every 2 seconds
+setInterval(() => {
+    const tracker = window.OrderTracker;
+    if (!tracker) return;
+
+    const active = tracker.getAllActiveOrders();
+    renderActiveOrders(active);   // 👈 use the new unified renderer
+}, 2000);
+
+
+// Minimize button
+document.getElementById('minimizeTracker')?.addEventListener('click', function() {
+    const content = document.getElementById('activeOrdersList');
+    const footer = panel.querySelector('div:last-child');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        if (footer) footer.style.display = 'block';
+        this.textContent = '_';
+        panel.style.height = 'auto';
+        panel.style.maxHeight = '400px';
+        this.title = 'Minimize';
+    } else {
+        content.style.display = 'none';
+        if (footer) footer.style.display = 'none';
+        this.textContent = '□';
+        panel.style.height = '60px';
+        panel.style.maxHeight = '60px';
+        this.title = 'Maximize';
+    }
+});
+
+// Close button
+// Resize Handle
+const resizeHandle = document.getElementById('pizzaResizeHandle');
+if (resizeHandle) {
+    resizeHandle.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        
+        const panel = document.getElementById('orderStatusPanel');
+        const startX = e.clientX;
+        const startY = e.clientY;
+
+        const rect = panel.getBoundingClientRect();
+        const startWidth = rect.width;
+        const startHeight = rect.height;
+
+        function resize(e) {
+            const newWidth = startWidth + (e.clientX - startX);
+            const newHeight = startHeight + (e.clientY - startY);
+
+            panel.style.width = newWidth + 'px';
+            panel.style.height = newHeight + 'px';
+        }
+
+        function stopResize() {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResize);
+        }
+
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stopResize);
+    });
+}
+
+document.getElementById('closeTracker')?.addEventListener('click', function() {
+    panel.style.display = 'none';
+    localStorage.setItem('pizzaPanelHidden', 'true');
+});
+
+// Show panel on page load (unless hidden)
+if (localStorage.getItem('pizzaPanelHidden') !== 'true') {
+    panel.style.display = 'block';
+}
+</script>
+<script>
+function showBasketWindow() {
+    ensurePopupManagerReady().then(() => {
+        window.popupManager.showWindow('basketWindow');
+        renderBasketUI();
+    });
+}
+
+</script>
+<script>
+function renderBasketUI() {
+    const el = document.getElementById('basketContent');
+    if (!el || !window.dashboard) return;
+   
+    const items = window.dashboard.basketOrders;
+    const allSelected = items.length > 0 && items.every(o => o.selected);
+    if (!items || items.length === 0) {
+        el.innerHTML = 'Basket is empty';
+        return;
+    }
+    
+    // Create table HTML like watchlist
+    el.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+         <colgroup>
+    <col style="width:30px">   <!-- checkbox -->
+    <col>                      <!-- symbol -->
+    <col style="width:70px">   <!-- strike -->
+    <col style="width:50px">   <!-- type -->
+    <col style="width:70px">   <!-- action -->
+    <col style="width:70px">   <!-- lots -->
+    <col style="width:70px">   <!-- ltp -->
+    <col style="width:80px">   <!-- price -->
+    <col style="width:40px">   <!-- delete -->
+</colgroup>
+
+            <thead>
+                <th class="resizable" style="width:30px;"><input type="checkbox"     id="selectAllBasket" ${allSelected ? 'checked' : ''}   onchange="toggleAllBasketItems(this.checked)"></th>
+               <th class="resizable">Symbol</th>
+               <th class="resizable">Strike</th>
+               <th class="resizable">Type</th>
+               <th class="resizable">Action</th>
+               <th class="resizable">Lots</th>
+               <th class="resizable">LTP</th>
+               <th class="resizable">Price</th>
+               <th class="resizable delete-col" style="width:40px; min-width:40px;">Del</th>
+
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map((item, i) => `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="window.dashboard.basketOrders[${i}].selected = this.checked"></td>
+                        <td>${item.symbol}</td>
+                        <td>${item.strike}</td>
+                        <td>${item.optionType}</td>
+                        <td><button onclick="toggleBasketAction(${i})" style="background:${item.action === 'BUY' ? '#27ae60' : '#e74c3c'}; color:white; padding:2px 8px; border:none; border-radius:3px;">${item.action}</button></td>
+                        <td><input type="number" value="${item.qty || 1}" 
+    style="width:70px; padding:4px; text-align:center; font-size:16px; border:1px solid #ddd; border-radius:3px;" 
+    onchange="window.dashboard.basketOrders[${i}].qty = parseInt(this.value) || 1; localStorage.setItem('basketOrders', JSON.stringify(window.dashboard.basketOrders));"></td>
+                        <td id="basketLTP-${i}" style="font-weight:bold; text-align:center;">-</td>
+                        <td>${item.price || 'MARKET'}</td>
+                        <td class="delete-col">
+  <button onclick="window.dashboard.removeBasketItem(${i}); renderBasketUI();">✖</button>
+</td>
+
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    // Update LTP for all items
+updateBasketLTP();
+// Make columns resizable
+setTimeout(makeBasketColumnsResizable, 200);
+// Load saved column widths
+setTimeout(loadBasketColumnWidths, 50);
+}
+function clearBasket() {
+    if (!window.dashboard) return;
+    if (confirm('Are you sure you want to clear all items from basket?')) {
+        window.dashboard.basketOrders = [];
+        localStorage.setItem('basketOrders', JSON.stringify([]));
+        renderBasketUI();
+    }
+}
+function makeBasketColumnsResizable() {
+    const table = document.querySelector('#basketWindow table');
+    if (!table) return;
+    
+    const cols = table.querySelectorAll('col');
+
+    cols.forEach((col, index) => {
+    const header = table.querySelectorAll('th.resizable')[index];
+
+        let startX, startWidth;
+        
+        const resizeHandle = document.createElement('div');
+        resizeHandle.style.cssText = `
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 5px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 20;
+            background: rgba(0,0,0,0.1);
+        `;
+        header.style.position = 'relative';
+        header.appendChild(resizeHandle);
+        
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startX = e.clientX;
+            startWidth = col.offsetWidth;
+
+            
+            const onMouseMove = (e) => {
+                let width = startWidth + (e.clientX - startX);
+                const minWidth = header.classList.contains('delete-col') ? 40 : 30;
+if (width < minWidth) width = minWidth;
+             
+                col.style.width = `${width}px`;
+
+            };
+            
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                saveBasketColumnWidths();
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    });
+}
+function saveBasketColumnWidths() {
+    const table = document.querySelector('#basketWindow table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.resizable');
+    const widths = Array.from(headers).map(th => th.style.width);
+    localStorage.setItem('basketColumnWidths', JSON.stringify(widths));
+}
+function toggleAllBasketItems(checked) {
+    if (!window.dashboard) return;
+    window.dashboard.basketOrders.forEach(item => {
+        item.selected = checked;
+    });
+    renderBasketUI();
+}
+async function updateBasketLTP() {
+    if (!window.dashboard || !window.dashboard.basketOrders.length) return;
+    
+    try {
+        // Get all unique symbols from basket
+        const symbols = window.dashboard.basketOrders
+            .map(item => item.symbol)
+            .filter((symbol, index, arr) => arr.indexOf(symbol) === index) // Unique
+            .join(',');
+        
+        if (!symbols) return;
+        
+        // Use same API as watchlist
+        const response = await fetch(`/api/portfolio-ltp?symbols=${encodeURIComponent(symbols)}`);
+        const data = await response.json();
+        
+        if (data.success && data.ltp_data) {
+            window.dashboard.basketOrders.forEach((item, i) => {
+                const ltpCell = document.getElementById(`basketLTP-${i}`);
+                if (!ltpCell) return;
+                
+                const quote = data.ltp_data[item.symbol];
+                if (quote && quote.ltp !== undefined) {
+                    ltpCell.textContent = quote.ltp.toFixed(2);
+                    // Color based on change (we don't have change data, so use simple logic)
+                    ltpCell.style.color = quote.ltp > (parseFloat(ltpCell.dataset.last) || 0) ? '#27ae60' : '#e74c3c';
+                    ltpCell.dataset.last = quote.ltp;
+                } else {
+                    ltpCell.textContent = '-';
+                    ltpCell.style.color = '#000';
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Basket LTP fetch error:', error);
+    }
+}
+// Also update when option chain refreshes
+if (typeof window !== 'undefined') {
+    window.addEventListener('optionChainUpdated', updateBasketLTP);
+}
+function loadBasketColumnWidths() {
+    const saved = localStorage.getItem('basketColumnWidths');
+    if (!saved) return;
+    
+    const widths = JSON.parse(saved);
+    const table = document.querySelector('#basketWindow table');
+    if (!table) return;
+    
+    const headers = table.querySelectorAll('th.resizable');
+    headers.forEach((th, i) => {
+        if (widths[i]) th.style.width = widths[i];
+    });
+}
+
+function toggleBasketAction(index) {
+    if (!window.dashboard || !window.dashboard.basketOrders[index]) return;
+    const item = window.dashboard.basketOrders[index];
+    item.action = item.action === 'BUY' ? 'SELL' : 'BUY';
+    renderBasketUI();
+}
+function onBasketItemCheckboxChange(index, checked) {
+    if (!window.dashboard) return;
+    window.dashboard.basketOrders[index].selected = checked;
+    renderBasketUI();
+}
+
+</script>
+<script>
+async function executeBasketFromUI() {
+    if (!window.dashboard) return;
+
+    const btn = document.getElementById('executeBasketBtn');
+    if (!btn) return;
+
+    // Disable button immediately
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = 'Executing…';
+
+    try {
+        await window.dashboard.executeBasket();
+
+    } finally {
+        // Re-enable after execution completes
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+
+    renderBasketUI();
+}
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const addToBasketBtn = document.getElementById('addToBasketBtn');
+    if (addToBasketBtn && window.dashboard) {
+        addToBasketBtn.addEventListener('click', () => {
+            window.dashboard.addOrderPopupToBasket();
+        });
+    }
+});
+</script>
+<script>
+// Dark Mode Toggle
+document.getElementById('darkModeToggle')?.addEventListener('click', function() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    // Change button icon
+    this.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+});
+
+// Load saved theme on page load
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('darkModeToggle').textContent = '☀️';
+}
+</script>
+
+</body>
+</html>

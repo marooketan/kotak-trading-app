@@ -1,0 +1,572 @@
+/* Dark Mode Variables */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #2c3e50;
+    --table-bg: #ffffff;
+    --header-bg: #2c3e50;
+    --border-color: #ddd;
+    --row-hover: #f5f5f5;
+}
+
+[data-theme="dark"] {
+    --bg-color: #1e1e1e;
+    --text-color: #e0e0e0;
+    --table-bg: #2d2d2d;
+    --header-bg: #1a1a1a;
+    --border-color: #444;
+    --row-hover: #3a3a3a;
+}
+
+[data-theme="dark"] body {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+[data-theme="dark"] .container {
+    background: var(--table-bg);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+}
+
+[data-theme="dark"] table {
+    background: var(--table-bg);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] th {
+    background: var(--header-bg) !important;
+}
+
+[data-theme="dark"] td {
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] tr:hover {
+    background: var(--row-hover) !important;
+}
+
+[data-theme="dark"] #loading {
+    color: #bbb;
+}
+
+* {
+
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+/* Update the .container */
+.container {
+    position: absolute;
+    top: 50px;
+    left: 50px;
+    margin: 0;
+
+    max-width: 90vw;
+    min-width: 300px;
+    height: 95vh; 
+    min-height: 400px;
+
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Update the header to look like a handle */
+header {
+    background: linear-gradient(135deg, #2c3e50, #34495e);
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    /* Key change for dragging: */
+    cursor: move; 
+    user-select: none; /* Prevents text highlighting while dragging */
+}
+header h1 {
+    font-size: 28px;
+    font-weight: 300;
+}
+
+.controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.controls button, .controls select, .controls input {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#toggleMode {
+    background: #e74c3c;
+    color: white;
+    font-weight: bold;
+}
+
+#toggleMode.on {
+    background: #27ae60;
+}
+
+#refreshBtn {
+    background: #3498db;
+    color: white;
+}
+
+#quantity {
+    width: 80px;
+    border: 2px solid #bdc3c7;
+    text-align: center;
+}
+
+.dashboard {
+    padding: 20px;
+    background: #ecf0f1;
+    border-bottom: 1px solid #bdc3c7;
+}
+
+.pnl-section h3 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+#pnlDisplay {
+    font-size: 24px;
+    font-weight: bold;
+    color: #27ae60;
+}
+
+
+.option-chain h2 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    text-align: center;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: center;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+th {
+    background: #34495e;
+    color: white;
+    font-weight: 600;
+}
+
+tr:hover {
+    background: #f8f9fa;
+}
+
+.buy-btn, .sell-btn {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.buy-btn {
+    background: #27ae60;
+}
+
+.buy-btn:hover {
+    background: #219a52;
+}
+
+.sell-btn {
+    background: #e74c3c;
+}
+
+.sell-btn:hover {
+    background: #c0392b;
+}
+
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background: white;
+    margin: 15% auto;
+    padding: 30px;
+    border-radius: 15px;
+    width: 400px;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
+.modal-buttons {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.modal-buttons button {
+    padding: 12px 25px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#confirmOrder {
+    background: #27ae60;
+    color: white;
+}
+
+#cancelOrder {
+    background: #e74c3c;
+    color: white;
+}
+
+#loading {
+    text-align: center;
+    padding: 40px;
+    font-size: 18px;
+    color: #7f8c8d;
+}
+
+.positive {
+    color: #27ae60;
+}
+
+.negative {
+    color: #e74c3c;
+}
+/* Fix for Login Section */
+.login-section {
+    background: #f8f9fa;
+    padding: 15px;
+    margin: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid #bdc3c7;
+}
+
+.login-section h3 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+}
+
+.login-section input {
+    padding: 10px;
+    border: 2px solid #bdc3c7;
+    border-radius: 6px;
+    width: 120px;
+    font-size: 14px;
+}
+
+.login-section button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+#loginBtn {
+    background: #27ae60;
+    color: white;
+}
+
+#hideLoginBtn {
+    background: #95a5a6;
+    color: white;
+    padding: 5px 10px;
+}
+
+#logoutBtn {
+    background: #e74c3c;
+    color: white;
+    padding: 5px 10px;
+    margin-left: 15px;
+}
+
+#loginStatus {
+    font-size: 14px;
+    color: #7f8c8d;
+    min-height: 20px;
+    margin-top: 10px;
+}
+/* Filter Group Styles */
+.filter-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.filter-group select {
+    padding: 8px 12px;
+    border: 2px solid #bdc3c7;
+    border-radius: 4px;
+    background: white;
+    font-size: 14px;
+    min-width: 120px;
+    cursor: pointer;
+}
+
+.filter-group select:focus {
+    border-color: #3498db;
+    outline: none;
+}
+
+/* Header controls layout adjustment */
+.controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+/* === FINAL FIXED OPTION CHAIN STYLES === */
+
+/* 1. Reset the table styles so sticky works */
+.option-chain table {
+    border-collapse: separate !important; 
+    border-spacing: 0;
+    width: 100%;
+    /* CRITICAL FIX: This undoes the 'overflow: hidden' from line 93 */
+    overflow: visible !important; 
+}
+
+
+/* 3. The Sticky Header itself */
+.option-chain th {
+    position: sticky !important;
+    top: 0;
+    z-index: 100;            /* Higher Z-index to stay above everything */
+    background: #34495e !important; 
+    color: white;
+    /* This shadow covers the gap if borders are separated */
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+    /* Fix for border leaking */
+    border-top: none;
+    border-bottom: 1px solid #2c3e50; 
+}
+
+/* 4. Fix for the Loading Text */
+#loading {
+    padding: 20px;
+    text-align: center;
+}
+/* --- Main Page Resize Handle Fix (Permanent) --- */
+.container {
+    padding-bottom: 30px !important;   /* Makes room for resize handle at the bottom */
+}
+
+.container .resize-handle {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    left: auto !important;
+    width: 20px !important;
+    height: 20px !important;
+    cursor: nwse-resize !important;
+    background: linear-gradient(135deg, transparent 50%, #e74c3c 50%) !important;
+}
+
+/* Allow the dashboard content to scroll if window is small */
+.dashboard, .option-chain-container, .orders-section {
+    overflow-y: auto;
+}
+/* Ensure the Option Chain doesn't fight the resize */
+.option-chain-container {
+    flex: 1; /* Takes up remaining space */
+    min-height: 0; /* Allows it to shrink */
+}
+.loading-spinner {
+    text-align: center;
+    padding: 20px;
+    font-size: 16px;
+    color: #666;
+    background: #f8f9fa;
+    border-radius: 5px;
+    margin: 10px 0;
+}
+
+.loading-error {
+    text-align: center;
+    padding: 20px;
+    font-size: 16px;
+    color: #dc3545;
+    background: #f8d7da;
+    border-radius: 5px;
+    margin: 10px 0;
+}
+
+/* Button loading state */
+.buy-btn:disabled, .sell-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Pulse animation for loading */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+.login-row {
+  background-color: #f9f9f9;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.login-row input[type="text"] {
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  padding: 6px;
+  width: 100px;
+}
+
+.login-row button {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.login-row button:hover {
+  background-color: #c0392b;
+}
+
+.login-row select {
+  border: 1px solid #bdc3c7;
+  border-radius: 4px;
+  padding: 6px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.login-row select:hover {
+  background-color: #ecf6fb;
+  border-color: #3498db;
+}
+.option-chain-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;   
+  overflow: auto;
+}
+.option-chain-container table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.option-chain-container th,
+.option-chain-container td {
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.option-chain-container th {
+  background-color: #f2f2f2;
+  color: #2c3e50;
+  position: sticky;
+  top: 0; /* keeps header visible when scrolling */
+  z-index: 2;
+}
+/* Compact option chain rows */
+#optionTable td {
+    padding-top: 1.0px;
+    padding-bottom: 1.0px;
+    line-height: 0.9;
+    font-size: 14px;   /* optional */
+}
+/* === CRISP ICON FIX === */
+.controls button {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-weight: bold;
+}
+
+/* Specific icon improvements */
+#refreshBtn { font-size: 18px !important; }
+button[title="Portfolio"] { font-size: 18px !important; }
+button[title="Orders"] { font-size: 18px !important; }
+button[title="Indices"] { font-size: 18px !important; }
+button[title="Settings"] { font-size: 18px !important; }
+#watchlistBtn { font-size: 18px !important; }
+}
+
+/* === FIX: OPTION CHAIN FILLS SPACE === */
+.option-chain-container {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.option-chain {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    border: 1px solid #3498db !important;
+    border-radius: 8px !important;
+    margin: 5px !important;
+    padding: 0 !important;
+}
+
+.option-chain table {
+    width: 100% !important;
+    min-height: 100% !important;
+}
+
+/* Remove conflicting old rules */
+.option-chain {
+    max-height: none !important;
+    height: auto !important;
+}
