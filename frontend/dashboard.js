@@ -182,7 +182,8 @@ try {
                     loadingDiv.style.display = 'block';
                     loadingDiv.innerHTML = '<div class="loading-spinner">⏳ Refreshing Option Chain...</div>';
                 }
-
+                // Reset the flag to allow table rebuild on manual refresh
+                if (this.optionChain) this.optionChain.hasInitialLoad = false;
                 // 2. Fetch Fresh Data
                 this.optionChain.loadOptionChain();
 
@@ -386,7 +387,8 @@ if (watchlistBtn) {
             kStatus.textContent = '(Live Mode)';
             kStatus.style.color = '#27ae60';    
         }
-           if (typeof updateAllPopupStatuses === 'function') updateAllPopupStatuses(true); 
+           if (typeof updateAllPopupStatuses === 'function') updateAllPopupStatuses(true);
+           
     }
 
     showLoggedOutState() {

@@ -38,6 +38,7 @@ class PopupManager {
             this.setupIndexPricesWindow();
             this.setupWatchlistWindow(); // Setup Watchlist
             this.setupSettingsWindow();
+            this.setupAlertWindow();
             this.setupBasketWindow();
             
             // Restore Positions (Memory)
@@ -71,6 +72,8 @@ class PopupManager {
     }
 
 heartbeatTick() {
+
+    
     if (document.hidden) return; // Sleep if tab hidden
 
     const now = Date.now();
@@ -100,7 +103,14 @@ heartbeatTick() {
     }
 
     // 4. CHECK INDEX PRICES (only if window is open)
+  
+if (this.openWindows.has('indexPricesWindow')) {
+    if (!this.isIndexFetching) {
+        this.updateIndexPrices();
+    }
+}
     if (this.openWindows.has('indexPricesWindow')) {
+     
         if (!this.isIndexFetching) {
             this.updateIndexPrices();
         }
@@ -148,7 +158,26 @@ heartbeatTick() {
         this.setupSettingsControls();
         this.windows.set('settingsWindow', window);
     }
-
+    
+        // === ALERT WINDOW ===
+    setupAlertWindow() {
+        const win = document.getElementById('alertWindow');
+        if (!win) return;
+        
+        this.makeDraggable(win);
+        this.makeResizable(win);
+        
+        // Close button
+        const closeBtn = win.querySelector('.close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.hideWindow('alertWindow'));
+        
+        // Minimize button  
+        const minBtn = win.querySelector('.minimize-btn');
+        if (minBtn) minBtn.addEventListener('click', () => this.toggleMinimize(win));
+        
+        // Register for memory
+        this.windows.set('alertWindow', win);
+    }
     setupBasketWindow() {
     const win = document.getElementById('basketWindow');
     if (!win) return;
@@ -253,6 +282,14 @@ heartbeatTick() {
     }
 
     async updateIndexPrices() {
+    
+     // ⬇️ ADD THIS SAFETY CHECK ⬇️
+    if (!this.openWindows.has('indexPricesWindow')) {
+        console.log('❌ Index window closed, skipping update');
+        return;
+    }
+
+                   
         if (this.isIndexFetching) return;
         this.isIndexFetching = true;
 
@@ -361,9 +398,19 @@ data.forEach(item => {
     }
 
     toggleMinimize(element) {
-        const content = element.querySelector('.window-content');
-        content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    if (element.style.height === '40px') {
+        // Restore original height
+        element.style.height = '';
+        element.style.overflow = '';
+    } else {
+        // Save original height and collapse
+        if (!element.dataset.originalHeight) {
+            element.dataset.originalHeight = element.style.height || '500px';
+        }
+        element.style.height = '40px'; // Just header height
+        element.style.overflow = 'hidden';
     }
+}
 
     showWindow(windowId) {
         const window = this.windows.get(windowId);
@@ -558,8 +605,65 @@ function updateAllPopupStatuses(isLoggedIn) {
     </div>
     <button class="oc-close" title="Dismiss">×</button>
   `;
-  banner.style.display = 'none'; // start hidden
+    // ===== BANNER STYLES =====
+  banner.style.cssText = `
+    position: fixed;
+    /* REMOVE: top: 20px; right: 20px; */
+    background: rgba(255, 235, 59, 0.85);
+    color: #333;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border-left: 5px solid #ff9800;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    cursor: move;
+    user-select: none;
+`;
+  // ===== END BANNER STYLES =====
+  
   document.body.appendChild(banner);
+  // ===== DRAGGABLE BANNER CODE =====
+let isDraggingBanner = false;
+let bannerStartX = 0, bannerStartY = 0, bannerStartLeft = 0, bannerStartTop = 0;
+
+banner.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'BUTTON' || e.target.classList.contains('oc-close')) return;
+    
+    isDraggingBanner = true;
+    bannerStartX = e.clientX;
+    bannerStartY = e.clientY;
+    
+    const rect = banner.getBoundingClientRect();
+    
+    // ⬇️ SIMPLE FIX: Always use current position ⬇️
+    bannerStartLeft = rect.left;
+    bannerStartTop = rect.top;
+    
+    banner.style.cursor = 'grabbing';
+    e.preventDefault();
+});
+document.addEventListener('mousemove', (e) => {
+    if (!isDraggingBanner) return;
+    
+    const dx = e.clientX - bannerStartX;
+    const dy = e.clientY - bannerStartY;
+    
+    banner.style.left = `${bannerStartLeft + dx}px`;
+    banner.style.top = `${bannerStartTop + dy}px`;
+    banner.style.right = 'auto';
+    banner.style.bottom = 'auto';
+});
+
+document.addEventListener('mouseup', () => {
+    if (isDraggingBanner) {
+        isDraggingBanner = false;
+        banner.style.cursor = 'move';
+    }
+});// ===== END DRAGGABLE CODE =====
+  
 
   const closeBtn = banner.querySelector('.oc-close');
   // session dismiss: hide for this session only
@@ -591,13 +695,28 @@ function updateAllPopupStatuses(isLoggedIn) {
 
   // Show or hide depending on state and session dismissal
  function refreshBannerVisibility() {
-  // If One-Click is ON, always show the banner and clear any prior session dismissal
+  const banner = document.getElementById('oneclickBanner');
+  
   if (isOneClickOn()) {
     sessionStorage.removeItem('oneclick_banner_dismissed');
+    
+    // ⬇️ CENTER ONLY ON FIRST SHOW ⬇️
+    if (!banner.dataset.hasBeenPositioned) {
+      // Remove any existing positioning
+      banner.style.right = 'auto';
+      banner.style.bottom = 'auto';
+      banner.style.left = '50%';
+      banner.style.top = '50%';
+      banner.style.transform = 'translate(-50%, -50%)';
+      
+      // Mark as positioned so it doesn't center again
+      banner.dataset.hasBeenPositioned = 'true';
+    }
+    
     banner.style.display = 'flex';
     return;
   }
-  // Otherwise hide the banner
+  
   banner.style.display = 'none';
 }
 

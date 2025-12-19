@@ -1,66 +1,103 @@
                   // === ORDER ENTRY LOGIC ===
 PopupManager.prototype.setupOrderEntryWindow = function () {
-     const winElement = document.getElementById('orderEntryWindow'); 
-        if (!winElement) return;
+    const winElement = document.getElementById('orderEntryWindow'); 
+    if (!winElement) return;
 
-        this.makeDraggable(winElement);
-        this.makeResizable(winElement);
-        winElement.querySelector('.close-btn').addEventListener('click', () => this.hideWindow('orderEntryWindow'));
-        winElement.querySelector('.minimize-btn').addEventListener('click', () => this.toggleMinimize(winElement));
-        
-        document.getElementById('actionBuy').addEventListener('click', () => { this.setOrderAction('BUY'); this.calculateOrderSummary(); });
-        document.getElementById('actionSell').addEventListener('click', () => { this.setOrderAction('SELL'); this.calculateOrderSummary(); });
-        document.getElementById('orderQty').addEventListener('input', () => this.calculateOrderSummary());
-        document.getElementById('orderQty').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        e.preventDefault(); // Prevent form submission
-        document.getElementById('submitOrderBtn').click(); // Trigger order placement
+    this.makeDraggable(winElement);
+    this.makeResizable(winElement);
+    winElement.querySelector('.close-btn').addEventListener('click', () => this.hideWindow('orderEntryWindow'));
+    winElement.querySelector('.minimize-btn').addEventListener('click', () => this.toggleMinimize(winElement));
+    
+    // Action buttons
+    document.getElementById('actionBuy').addEventListener('click', () => { 
+        this.setOrderAction('BUY'); 
+        this.calculateOrderSummary(); 
+    });
+    document.getElementById('actionSell').addEventListener('click', () => { 
+        this.setOrderAction('SELL'); 
+        this.calculateOrderSummary(); 
+    });
+    
+    // Quantity input
+    document.getElementById('orderQty').addEventListener('input', () => this.calculateOrderSummary());
+    document.getElementById('orderQty').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('submitOrderBtn').click();
+        }
+    });
+    
+    // Price type
+    document.getElementById('priceTypeSelect').addEventListener('change', (e) => { 
+        this.toggleLimitPrice(e.target.value); 
+        this.calculateOrderSummary(); 
+    });
+    document.getElementById('limitPrice').addEventListener('input', () => this.calculateOrderSummary());
+    
+    // Cancel button
+    const cancelBtn = document.getElementById("cancelOrderBtn");
+    if (cancelBtn) {
+        cancelBtn.addEventListener("click", () => {
+            this.hideWindow("orderEntryWindow");
+        });
     }
-});
 
+    // Submit order button
+    const submitOrderBtn = document.getElementById('submitOrderBtn');
+    if (submitOrderBtn) {
+        submitOrderBtn.addEventListener('click', () => {
+            const orderDetails = this.getOrderDetailsFromForm();
+            console.log('🍕 Popup submit orderDetails =', orderDetails);
 
-        document.getElementById('priceTypeSelect').addEventListener('change', (e) => { this.toggleLimitPrice(e.target.value); this.calculateOrderSummary(); });
-        document.getElementById('limitPrice').addEventListener('input', () => this.calculateOrderSummary());
-        // === Activate Cancel button ===
-        const cancelBtn = document.getElementById("cancelOrderBtn");
-        if (cancelBtn) {
-           cancelBtn.addEventListener("click", () => {
-               // Use PopupManager method to hide the order entry window
-               window.popupManager.hideWindow("orderEntryWindow");
-            });
-         }
+            const dashboard = window.dashboard || (window.opener ? window.opener.dashboard : null);
 
-        const submitOrderBtn = document.getElementById('submitOrderBtn');
-        if (submitOrderBtn) {
-            submitOrderBtn.addEventListener('click', () => {
-            
-                const orderDetails = this.getOrderDetailsFromForm();
-                console.log('🍕 Popup submit orderDetails =', orderDetails);
-
-                const dashboard = window.dashboard || (window.opener ? window.opener.dashboard : null);
-
-             if (dashboard && typeof dashboard.placeConfirmedOrder === 'function') {
-            // 👉 Create Pizza Tracker order *here* when popup is confirmed
-            let orderId = null;
-            if (window.OrderTracker) {
-                orderId = window.OrderTracker.createOrder(orderDetails);
-                console.log('🍕 Popup created orderId:', orderId);
-            }
-
-            // Pass orderId so placeConfirmedOrder can update PENDING → REJECTED/CONFIRMED
-            dashboard.placeConfirmedOrder(orderDetails, orderId);
-            this.hideWindow('orderEntryWindow'); 
-        } else {
-
-                    console.error("Dashboard missing. window.dashboard is:", window.dashboard);
-                    alert('❌ Error: Dashboard not found. Please refresh the page.');
+            if (dashboard && typeof dashboard.placeConfirmedOrder === 'function') {
+                let orderId = null;
+                if (window.OrderTracker) {
+                    orderId = window.OrderTracker.createOrder(orderDetails);
+                    console.log('🍕 Popup created orderId:', orderId);
                 }
-            });
-        } 
-        
-        this.windows.set('orderEntryWindow', winElement);
-};
+                dashboard.placeConfirmedOrder(orderDetails, orderId);
+                this.hideWindow('orderEntryWindow'); 
+            } else {
+                console.error("Dashboard missing. window.dashboard is:", window.dashboard);
+                alert('❌ Error: Dashboard not found. Please refresh the page.');
+            }
+        });
+    }
+    
+    // ===== ADD TO BASKET BUTTON =====
+    const addToBasketBtn = document.getElementById('addToBasketBtn');
+    if (addToBasketBtn) {
+        addToBasketBtn.addEventListener('click', () => {
+            console.log('🧺 Closing popup after adding to basket');
+            this.hideWindow('orderEntryWindow');
+        });
+    }
+    
+    // ===== ALERT BUTTON =====
+    const alertBtn = document.getElementById('btn-order-to-alert');
+    if (alertBtn) {
+        alertBtn.addEventListener('click', () => {
+            console.log("🔔 Alert button clicked!");
+            
+            const symbol = document.getElementById('orderSymbol')?.value;
+            const price = document.getElementById('orderEntryWindow')?.dataset?.currentPrice || "0";
 
+            console.log("Symbol:", symbol, "Price:", price);
+            
+            this.hideWindow('orderEntryWindow');
+
+            if (window.popupAlerts && window.popupAlerts.openWithData) {
+                window.popupAlerts.openWithData(symbol, price);
+            } else {
+                console.error("PopupAlerts not available!");
+            }
+        });
+    }
+    
+    this.windows.set('orderEntryWindow', winElement);
+};
 PopupManager.prototype.openOrderEntry = async function (orderDetails) {
     document.getElementById('orderSymbol').value = orderDetails.symbol;
         document.getElementById('orderStrike').value = orderDetails.strike;

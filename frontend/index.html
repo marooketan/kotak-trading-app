@@ -7,6 +7,52 @@
     <link rel="stylesheet" href="./style.css">
     <link rel="stylesheet" href="./popup-styles.css">
     <style>
+         /* Dark Mode Colors */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #2c3e50;
+    --table-bg: #ffffff;
+    --header-bg: #2c3e50;
+    --border-color: #ddd;
+    --row-hover: #f5f5f5;
+}
+
+[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --table-bg: #2d2d2d;
+    --header-bg: #1a1a1a;
+    --border-color: #444;
+    --row-hover: #333;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.container {
+    background-color: var(--bg-color);
+}
+
+table {
+    background-color: var(--table-bg);
+    color: var(--text-color);
+}
+
+table th {
+    background-color: var(--header-bg) !important;
+    color: white !important;
+}
+
+table tr:hover {
+    background-color: var(--row-hover);
+}
+
+.popup-window {
+    background-color: var(--table-bg);
+    border-color: var(--border-color);
+}
         /* === 1. POPUP WINDOW BASICS === */
         .popup-window {
             display: none;
@@ -289,7 +335,9 @@
                 <button onclick="showOrderHistoryWindow()" title="Orders" style="padding: 4px 8px; font-size: 20px; line-height: 1;">📋</button>
                 <button onclick="showIndexPricesWindow()" title="Indices" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🧮</button>
                 <button onclick="showSettingsWindow()" title="Settings" style="padding: 4px 8px; font-size: 20px; line-height: 1;">⚙️</button>
+                <button id="darkModeToggle" title="Toggle Dark Mode" style="padding: 4px 8px; font-size: 20px; line-height: 1;">🌙</button>
                 <button id="watchlistBtn" title="Watchlist" style="padding: 4px 8px; font-size: 20px; line-height: 1;">👁️</button>
+                <button onclick="if(window.popupAlerts) popupAlerts.open()" title="Alerts" style="padding: 4px 8px; font-size: 20px; line-height: 1; cursor: pointer;">🔔</button>
                 <!-- TOTP & Login Controls -->
               <input type="text" id="totpInput" placeholder="TOTP" maxlength="6" 
        style="width: 90px; padding: 6px 8px; font-size: 13px; border: 1px solid #bdc3c7; border-radius: 4px; margin-left: 10px;">
@@ -565,6 +613,7 @@
 
                 <div class="form-buttons">
                     <button id="cancelOrderBtn" class="btn-cancel">Cancel</button>
+                    <button id="btn-order-to-alert" class="btn-secondary" style="background: #ffc107; color: black; font-weight: bold; margin-right: 5px;" title="Create Alert">🔔</button>
                     <button id="addToBasketBtn" class="btn-secondary">Add to Basket</button>
                     <button id="submitOrderBtn" class="btn-primary">Place Order</button>
                 </div>
@@ -671,6 +720,59 @@
         <div class="resize-handle"></div>
         
     </div>
+      </div>
+       <!-- Alert Popup Window -->
+<div id="alertWindow" class="popup-window" style="display: none; width: 400px; position: fixed; top: 150px; left: 40%; z-index: 9999;">
+    <div class="window-header">
+        <div class="window-title">🔔 Price Alerts
+            <span class="status-badge popup-user-status">Live</span>
+        </div>
+        <div class="window-controls">
+            <button class="minimize-btn" title="Minimize">-</button>
+            <button class="close-btn" title="Close">×</button>
+        </div>
+    </div>
+    
+    <div class="window-content" style="padding: 10px;">
+        
+        <div style="background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #3e3e42; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span id="alert-active-symbol" style="color: #4da6ff; font-weight: bold; font-size: 14px;">No Symbol Selected</span>
+                <span style="color: #ccc;">LTP: <span id="alert-live-ltp" style="color: white; font-weight: bold;">0.00</span></span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+            <select id="alert-condition" class="form-select" style="width: 40%; padding: 6px; background: #1e1e1e; color: white; border: 1px solid #444;">
+                <option value="GREATER">Higher Than (>)</option>
+                <option value="LESS">Lower Than (<)</option>
+            </select>
+            
+            <input type="number" id="alert-target-price" placeholder="Target Price" class="form-control" style="width: 35%; padding: 6px; background: #1e1e1e; color: white; border: 1px solid #444;">
+            
+            <button id="btn-set-alert" style="width: 25%; background: #007acc; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">Set 🔔</button>
+        </div>
+        
+        <hr style="border-color: #333; margin-bottom: 10px;">
+        
+        <div class="table-scroll-wrapper" style="height: 250px; overflow-y: auto; background: #1e1e1e;">
+            <table id="alertTable" class="orders-table" style="width: 100%;">
+                <thead style="position: sticky; top: 0; background: #2d2d30;">
+                    <tr>
+                        <th style="padding: 5px;">Symbol</th>
+                        <th style="padding: 5px;">LTP</th>
+                        <th style="padding: 5px;">Cond</th>
+                        <th style="padding: 5px;">Target</th>
+                        <th style="padding: 5px;">X</th>
+                    </tr>
+                </thead>
+                <tbody id="alert-list-body">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+    
     <div id="basketWindow" class="popup-window" style="display:none; width: 500px; height: 400px;">
     <div class="window-header">
         <div class="window-title">🧺 Basket
@@ -744,6 +846,8 @@
     <script src="user-activity-manager.js"></script>
     <script src="watchlist-manager.js"></script>
     <script src="optionchain-ui-controller.js"></script>
+    <script src="alert-manager.js"></script> 
+    <script src="popup-alerts.js"></script>
     <script src="./dashboard.js"></script>
     
     <script>
@@ -1387,7 +1491,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+<script>
+// Dark Mode Toggle
+document.getElementById('darkModeToggle')?.addEventListener('click', function() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    // Change button icon
+    this.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+});
 
+// Load saved theme on page load
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('darkModeToggle').textContent = '☀️';
+}
+</script>
 
 </body>
 </html>

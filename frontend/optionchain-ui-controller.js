@@ -11,8 +11,8 @@ class OptionChainUIController {
         // 1. Generic listeners (Market, Expiry, Strikes) -> Just reload the table
         // REMOVED 'indexSelect' from this list!
         ['expirySelect', 'strikeCount'].forEach(id => {
-            const el = document.getElementById(id);
-           if (el) el.addEventListener('change', () => {
+    const el = document.getElementById(id);
+   if (el) el.addEventListener('change', () => {
     console.log("🔄 Dropdown changed -> HARD refresh option chain");
     this.dashboard.activityManager.trackUserActivity(); 
 
@@ -31,11 +31,11 @@ class OptionChainUIController {
     }
 
     // Now load fresh data
+    this.dashboard.optionChain.hasInitialLoad = false; // 🔄 Reset flag for fresh rebuild
     this.dashboard.optionChain.loadOptionChain();
 
 });
-
-        });
+});
 
        // 2. Special listener for marketType -> change available indices
 const marketTypeEl = document.getElementById('marketType');

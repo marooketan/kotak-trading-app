@@ -1,4 +1,11 @@
+
+
+let isIndexQuotesActive = false;
+
+
 function updateIndexPricesPopup() {
+    if (!isIndexQuotesActive) return;
+
     fetch('/api/index-quotes')
         .then(r => r.json())
         .then(data => {
@@ -29,13 +36,15 @@ function updateIndexPricesPopup() {
 let indexPriceInterval;
 
 function startIndexPriceUpdates() {
+    isIndexQuotesActive = true;
     updateIndexPricesPopup();
     if (!indexPriceInterval) {
-        indexPriceInterval = setInterval(updateIndexPricesPopup, 500);
+        indexPriceInterval = setInterval(updateIndexPricesPopup, 500); // ✅ ADD THIS LINE
     }
 }
-
 function stopIndexPriceUpdates() {
+    isIndexQuotesActive = false;
+
     clearInterval(indexPriceInterval);
     indexPriceInterval = null;
 }

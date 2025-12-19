@@ -1,8 +1,14 @@
+let lastOCLogTime = 0;
+const OC_LOG_INTERVAL = 5 * 60 * 1000;
+
+
+
 class OptionChainManager {
 constructor(dashboard, activityManager) {
 
     this.dashboard = dashboard;
     this.activityManager = activityManager;
+    this.hasInitialLoad = false;
 }
     loadExpiries() {
         return this.dashboard.loadExpiries();
@@ -10,6 +16,7 @@ constructor(dashboard, activityManager) {
 
     getStrikeInterval(index) {
         if (index.includes('BANKNIFTY') || index.includes('MIDCPNIFTY')) return 100;
+         if (index.includes('SENSEX') || index.includes('BANKEX')) return 100;
         return 50;
     }
 
@@ -23,14 +30,22 @@ constructor(dashboard, activityManager) {
     }
 
     async loadOptionChain() {
+   const t0 = performance.now();
+   const now = Date.now();
+   if (now - lastOCLogTime > OC_LOG_INTERVAL) {
+    console.log('[OC] Start fetch');
+   }
+
+    
 
     // 1. RACE CONDITION HANDLING
 if (this.isFetching) {
     if (this.fetchController) {
         this.fetchController.abort();
+          
     }
 }
-
+   
 // 2. SETUP NEW REQUEST
 this.fetchController = new AbortController();
 this.isFetching = true;
@@ -96,6 +111,14 @@ this.fetchController.signal.addEventListener('abort', () => {
         
         clearTimeout(timeoutId); // Cancel timeout if successful
         const data = await response.json();
+        const t1 = performance.now();
+        const now = Date.now();
+        if (now - lastOCLogTime > OC_LOG_INTERVAL) {
+        console.log('[OC] Fetch time:', (t1 - t0).toFixed(2), 'ms');
+        lastOCLogTime = now;
+        }
+
+
 
         // 🔥 FIX: Reset retry counter on SUCCESS only
         this.optionChainRetryCount = 0;
@@ -104,6 +127,12 @@ this.fetchController.signal.addEventListener('abort', () => {
         if (this.requestCounter !== currentTicket) return;
 
         if (data.success) {
+            const t2 = performance.now();
+            const now = Date.now();
+        if (now - lastOCLogTime > OC_LOG_INTERVAL) {
+        console.log('[OC] Start render');
+        }
+
             this.displayOptionChain(data.data, data.spot, index);
 
 
@@ -117,6 +146,10 @@ this.fetchController.signal.addEventListener('abort', () => {
                 loadingDiv.textContent = data.message;
                 loadingDiv.style.display = 'block';
             }
+        const t3 = performance.now();
+        console.log('[OC] Render time:', (t3 - t2).toFixed(2), 'ms');
+        console.log('[OC] Total time:', (t3 - t0).toFixed(2), 'ms');
+
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
@@ -180,6 +213,8 @@ this.fetchController.signal.addEventListener('abort', () => {
 
 
  displayOptionChain(data, spotPrice, index) {
+        const tRenderStart = performance.now();
+
         const tbody = document.getElementById('optionData');
         const loading = document.getElementById('loading');
         const optionTable = document.getElementById('optionTable');
@@ -191,30 +226,22 @@ this.fetchController.signal.addEventListener('abort', () => {
 
         const fmt = (n) => parseFloat(n).toFixed(2);
 
-        const updateCell = (id, newVal) => {
-            const el = document.getElementById(id);
-            if (el) {
-                const newText = fmt(newVal);
-                const currentText = el.innerText;
-                
-                if (newText === currentText) return; 
-
-                const oldVal = parseFloat(currentText.replace(/,/g, '')) || 0;
-                const val = parseFloat(newVal);
-                
-                el.innerText = newText;
-
-                if (val !== oldVal) {
-                    el.style.color = val > oldVal ? '#27ae60' : '#c0392b';
-                    setTimeout(() => { el.style.color = ''; }, 500);
-                }
-            }
-        };
+       const updateCell = (id, newVal) => {
+    const el = document.getElementById(id);
+    if (el) {
+        const newText = fmt(newVal);
+        if (el.innerText !== newText) {
+            el.innerText = newText;
+        }
+    }
+};
 
         const existingRows = tbody.querySelectorAll('tr');
-        const needRebuild = existingRows.length === 0 || 
-                            existingRows.length !== data.length ||
-                            existingRows[0].id !== `row-${data[0].strike}`;
+        const needRebuild = !this.hasInitialLoad && 
+                    (existingRows.length === 0 || 
+                     existingRows.length !== data.length ||
+                     existingRows[0].id !== `row-${data[0].strike}`);
+                            
 
         const strikeInterval = this.getStrikeInterval(index);
 
@@ -234,10 +261,13 @@ window.optionChainData = data.map(row => ({
     ltp: row.put.ltp,
     change: row.put.change || 0
 })));
-       // Trigger LTP update for basket
-if (typeof updateBasketLTP === 'function') {
+       // Trigger LTP update for basket ONLY IF BASKET WINDOW IS OPEN
+if (typeof updateBasketLTP === 'function' && 
+    window.popupManager && 
+    window.popupManager.openWindows && 
+    window.popupManager.openWindows.has('basketWindow')) {
     setTimeout(updateBasketLTP, 50);
-} 
+}
 
         if (needRebuild) {
             tbody.innerHTML = data.map(row => {
@@ -265,7 +295,7 @@ if (typeof updateBasketLTP === 'function') {
                     </td>
                 </tr>`;
             }).join('');
-
+               this.hasInitialLoad = true;
         } else {
             data.forEach(row => {
                 updateCell(`ce-bid-${row.strike}`, row.call.bid);
@@ -277,21 +307,28 @@ if (typeof updateBasketLTP === 'function') {
 
                 const tr = document.getElementById(`row-${row.strike}`);
                 if (tr) {
-                    const isATM = row.strike === atmStrike;
-                    if (isATM) tr.style.backgroundColor = '#fff9c4';
-                    else tr.style.backgroundColor = '';
+                    //const isATM = row.strike === atmStrike;
+                    //if (isATM) tr.style.backgroundColor = '#fff9c4';
+                    //else tr.style.backgroundColor = '';
 
                     tr.className = row.strike < spotPrice ? 'itm' : 'otm';
 
                     const strikeCell = document.getElementById(`strike-cell-${row.strike}`);
                     if (strikeCell) {
-                        const hasATM = strikeCell.innerHTML.includes('ATM');
-                        if (isATM && !hasATM) strikeCell.innerHTML = `<strong>${row.strike}</strong> <span style="color:#ffb300;font-weight:bold;">ATM</span>`;
-                        else if (!isATM && hasATM) strikeCell.innerHTML = `<strong>${row.strike}</strong>`;
+                        //const hasATM = strikeCell.innerHTML.includes('ATM');
+                        //if (isATM && !hasATM) strikeCell.innerHTML = `<strong>${row.strike}</strong> <span style="color:#ffb300;font-weight:bold;">ATM</span>`;
+                        //else if (!isATM && hasATM) strikeCell.innerHTML = `<strong>${row.strike}</strong>`;
                     }
                 }
             });
         }
+     const tRenderEnd = performance.now();
+     const now = Date.now();
+     if (now - lastOCLogTime < 1000) {
+     console.log('[OC] Render time:', (tRenderEnd - tRenderStart).toFixed(2), 'ms');
+     }
+
+
     }
      showOptionChainLoading(show, isError = false) {
         const loading = document.getElementById('loading');
@@ -314,6 +351,7 @@ if (typeof updateBasketLTP === 'function') {
         if (tbody && show) tbody.innerHTML = '';
     }
     async loadExpiries() {
+        this.hasInitialLoad = false; // Reset for new market/index
         const indexSelect = document.getElementById('indexSelect');
         const expirySelect = document.getElementById('expirySelect');
         
