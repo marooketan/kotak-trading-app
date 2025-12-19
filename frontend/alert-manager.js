@@ -7,7 +7,7 @@ class AlertManager {
         console.log("✅ Alert Manager Loaded", this.alerts.length, "alerts");
         
         // Start price monitor
-        setInterval(() => this.fetchAlertPrices(), 5000);
+        setInterval(() => this.fetchAlertPrices(), 1000);
     }
 
     saveAlerts() {
@@ -133,7 +133,7 @@ alert(`🔔 PRICE ALERT!\n\n${alertData.symbol}\nTarget: ${alertData.price}\nCur
         const alertRow = document.querySelector(`[data-alert-id="${alertData.id}"]`);
         if (alertRow) {
             // Change row color to indicate triggered
-            alertRow.style.backgroundColor = '#ffebee';
+            alertRow.style.backgroundColor = '#e3f2fd';
             alertRow.style.opacity = '0.7';
             
             // Add "TRIGGERED" badge
