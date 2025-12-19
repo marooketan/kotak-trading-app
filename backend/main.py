@@ -1,6 +1,6 @@
 import os
 import logging
-from fastapi import FastAPI, Form, Query, Request
+from fastapi import FastAPI, Form, Query, Request, WebSocket
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import requests
@@ -8,6 +8,8 @@ from datetime import datetime
 import pandas as pd
 from typing import Dict, List, Optional
 import re
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 import urllib.parse
 import time
@@ -370,8 +372,10 @@ class KotakNiftyAPI:
             df = self.nfo_master_df
 
         # If memory is empty, try fallback to disk (Safety Net)
+
+        master_path = BFO_MASTERPATH if segment == "BFO" else MASTERPATH
         if df is None:
-            master_path = BFO_MASTERPATH if segment == "BFO" else MASTERPATH
+           
             if not os.path.exists(master_path): return []
             try:
                 df = pd.read_csv(master_path)
@@ -576,11 +580,13 @@ class KotakNiftyAPI:
                 if 'PE' in token_map[s]: slugs.append(f"{exch_fo}|{token_map[s]['PE']}")
 
             # === 2. OPTION QUOTES ===
+            # === 2. OPTION QUOTES (PARALLEL) ===
             q_data = {}
             if slugs:
-                chunk_size = 50 
-                for i in range(0, len(slugs), chunk_size):
-                    chunk = slugs[i:i + chunk_size]
+                chunk_size = 50
+                chunks = [slugs[i:i + chunk_size] for i in range(0, len(slugs), chunk_size)]
+    
+                def fetch_chunk(chunk):
                     q_url = f"{current_session['base_url']}/script-details/1.0/quotes/neosymbol/{','.join(chunk)}"
                     try:
                         q_r = self.api_session.get(q_url, headers=self.get_headers(), timeout=2)
@@ -588,9 +594,17 @@ class KotakNiftyAPI:
                             res = q_r.json()
                             items = res['data'] if isinstance(res, dict) and 'data' in res else res
                             if isinstance(items, list):
-                                for item in items:
-                                    if isinstance(item, dict): q_data[item.get('exchange_token')] = item
-                    except: pass
+                                return [(item.get('exchange_token'), item) for item in items if isinstance(item, dict)]
+                    except:
+                        pass
+                    return []
+    
+                # Fetch all chunks in parallel
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    results = executor.map(fetch_chunk, chunks)
+                    for chunk_results in results:
+                        for token, item in chunk_results:
+                            q_data[token] = item
 
             # Build Chain Data
             chain_data = []
@@ -1421,6 +1435,9 @@ def lot_size(symbol: str = Query(...), segment: str = Query("NFO")):
     except:
         return {"success": True, "lot_size": 1}
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
+
+
+
 if os.path.exists(frontend_path): app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 if __name__ == "__main__":
