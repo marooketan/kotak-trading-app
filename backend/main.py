@@ -11,6 +11,10 @@ import re
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import json
+import threading
+from strategy.engine import StrategyEngine
+import strategy.strategy_config as config
+
 import urllib.parse
 import time
 import uuid
@@ -20,8 +24,11 @@ MASTERFILENAME = "kotak_master_live.csv"
 MASTERPATH = os.path.join(os.path.expanduser("~"), "Desktop", MASTERFILENAME)
 BFO_MASTERFILENAME = "kotak_bfo_live.csv"
 BFO_MASTERPATH = os.path.join(os.path.expanduser("~"), "Desktop", BFO_MASTERFILENAME)
-USERS_FILE = "users.json"
-SESSION_FILE = "session_cache.json"
+# === FIX: USE ABSOLUTE PATHS SO SUB-FOLDERS CAN FIND THEM ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+USERS_FILE = os.path.join(BASE_DIR, "users.json")
+SESSION_FILE = os.path.join(BASE_DIR, "session_cache.json")
+
 MY_MPIN = "523698"
 
 logging.basicConfig(level=logging.INFO)
@@ -623,13 +630,31 @@ class KotakNiftyAPI:
                 # STORE TOKEN for Watchlist
                 ce_ex_token = str(ce_row['pSymbol'].values[0]).strip() if not ce_row.empty else None
                 pe_ex_token = str(pe_row['pSymbol'].values[0]).strip() if not pe_row.empty else None
+               
 
                 chain_data.append({
                     "strike": s,
-                    "call": {"token": ce_ex_token, "bid": get_p(ce, 'buy'), "ask": get_p(ce, 'sell'), "ltp": get_v(ce, 'ltp'), "oi": get_v(ce, 'open_int'), "pTrdSymbol": ce_symbol},
-                    "put": {"token": pe_ex_token, "bid": get_p(pe, 'buy'), "ask": get_p(pe, 'sell'), "ltp": get_v(pe, 'ltp'), "oi": get_v(pe, 'open_int'), "pTrdSymbol": pe_symbol},
+                    "call": {
+                        "token": ce_ex_token,
+                        "bid": get_p(ce, 'buy'),
+                        "ask": get_p(ce, 'sell'),
+                        "ltp": get_v(ce, 'ltp'),
+                        "oi": get_v(ce, 'open_int'),
+                        "atp": get_v(ce, 'avg_cost'),
+                        "pTrdSymbol": ce_symbol
+                    },
+                    "put": {
+                        "token": pe_ex_token,
+                        "bid": get_p(pe, 'buy'),
+                        "ask": get_p(pe, 'sell'),
+                        "ltp": get_v(pe, 'ltp'),
+                        "oi": get_v(pe, 'open_int'),
+                        "atp": get_v(pe, 'avg_cost'),
+                        "pTrdSymbol": pe_symbol
+                    },
                     "pTrdSymbol": ce_symbol or pe_symbol
                 })
+
 
             return {
                 "success": True, 
@@ -1142,6 +1167,15 @@ class KotakNiftyAPI:
             return {"success": False, "message": str(ex)}
    
 kotak_api = KotakNiftyAPI()
+# CHANGED: We pass 'kotak_api' into the engine here!
+bot_engine = StrategyEngine(kotak_api)
+bot_thread = None
+
+
+def run_engine_in_background():
+    """Helper to run the loop without freezing the server"""
+    bot_engine.start()
+
 # Initialize cache on startup (Load BOTH to be ready)
 kotak_api.load_master_into_memory("NFO")
 kotak_api.load_master_into_memory("BFO")
@@ -1291,6 +1325,80 @@ def chain_api(expiry: str, strikes: str = "10", index: str = "NIFTY", segment: s
 @app.get("/api/portfolio")
 def portfolio_api():
     return kotak_api.get_positions()
+# ======================================================
+# STRATEGY API (The "Waiter" for your Auto-Trader)
+# ======================================================
+
+
+@app.get("/api/strategy/status")
+def get_strategy_status():
+    """
+    UI asks: 'What is happening?'
+    API answers: Status, Active Trades, PnL
+    """
+    # Convert the internal trade objects to simple text for the UI
+    ce_trades = []
+    for t in bot_engine.active_ce_trades:
+        ce_trades.append({
+            "strike": t.strike, "type": "CE", 
+            "entry": t.entry_price, "sl": t.sl_price, "pnl": 0 # We will calc PnL later
+        })
+        
+    pe_trades = []
+    for t in bot_engine.active_pe_trades:
+        pe_trades.append({
+            "strike": t.strike, "type": "PE", 
+            "entry": t.entry_price, "sl": t.sl_price, "pnl": 0
+        })
+
+    return {
+        "running": bot_engine.is_running,
+        "state": bot_engine.current_state.value,
+        "ce_trades": ce_trades,
+        "pe_trades": pe_trades,
+        "config": {
+            "sl_percentage": config.SL_PERCENTAGE,
+            "max_trades": config.MAX_OPEN_POSITIONS,
+            "paper_mode": config.PAPER_TRADING
+        }
+    }
+
+@app.post("/api/strategy/start")
+def start_strategy():
+    """UI says: 'Start the Engine!'"""
+    global bot_thread
+    if bot_engine.is_running:
+        return {"success": False, "message": "Already running"}
+    
+    # Run in a separate thread so the website stays fast
+    bot_thread = threading.Thread(target=run_engine_in_background)
+    bot_thread.daemon = True # Kills thread if main app closes
+    bot_thread.start()
+    
+    return {"success": True, "message": "Strategy Started"}
+
+@app.post("/api/strategy/stop")
+def stop_strategy():
+    """UI says: 'Stop!'"""
+    bot_engine.stop()
+    return {"success": True, "message": "Stop Signal Sent"}
+
+@app.post("/api/strategy/update-config")
+async def update_config(request: Request):
+    """UI says: 'Change the rules'"""
+    data = await request.json()
+    
+    # Update the config variables in memory
+    if "sl_percentage" in data:
+        config.SL_PERCENTAGE = float(data["sl_percentage"])
+    
+    if "max_trades" in data:
+        config.MAX_OPEN_POSITIONS = int(data["max_trades"])
+        
+    if "paper_mode" in data:
+        config.PAPER_TRADING = bool(data["paper_mode"])
+
+    return {"success": True, "message": "Config Updated"}
 
 
 # --- CRITICAL FIX: Removed 'async' here ---
@@ -1439,7 +1547,6 @@ frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
 
 if os.path.exists(frontend_path): app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-
 if __name__ == "__main__":
     import uvicorn
     
