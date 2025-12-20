@@ -1,0 +1,11 @@
+{
+    "current_user": "ketan",
+    "sessions": {
+        "ketan": {
+            "base_url": "https://mis.kotaksecurities.com",
+            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6WyJUcmFkZSJdLCJleHAiOjE3NjYyNTU0MDAsImp0aSI6ImJlYjk4Y2Y5LTc4MTgtNGEyMS1iMWYzLWQwNWQ4ZGVkZGExMSIsImlhdCI6MTc2NjIwNjMwMCwiaXNzIjoibG9naW4tc2VydmljZSIsInN1YiI6IjZhZTYwYmU5LWJkY2MtNDMwOS1hMTQ2LWJjODBlZTU5YzFiMSIsInVjYyI6IlpIMzI5IiwibmFwIjoiIiwieWNlIjoiZVlcXDYgJD81XCJyXHUwMDAyXHUwMDBlXHUwMDAyZFx1MDAwMFx1MDAxMGIiLCJmZXRjaGNhY2hpbmdydWxlIjowLCJjYXRlZ29yaXNhdGlvbiI6IiJ9.qJWc5IN4s2Kvni-mo9yiN0cs8Yzs4AWO-62EU--YnunMaoxLsAvvcvFCe1WWMVrDKfLPE6FY-bSc4xx6gM-dzDaux5_MIFlzBwvu0YA5D_R3l_JYhgvXOc9P-EGXOPxlm1BNOvb1EZ72RdrlrC-MxAdQycssvJcUXsh2NldTKWvhcFwDP5j5gpw4ESO3OIQ4_Z7w_Rv4SACp9cmLEwqqu66wYx7D-3bzkrodUxGKaQCi00CxLtfTY4JUYmi_pcKC7oCCABcVoL6969mf657zVvkDkQy_jz7K5DEgTXpGt5uS4RsNN96hXQU7-FK8rOuTbP8n3KQlGdn2EwdFHoAEfw",
+            "sid": "4d1801c0-a8b0-4202-b423-f5dfaaf72f25",
+            "authenticated": true
+        }
+    }
+}
