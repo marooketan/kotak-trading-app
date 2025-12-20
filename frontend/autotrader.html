@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Kotak Auto-Trader</title>
+    <style>
+        :root { --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --green: #00c853; --red: #d50000; --blue: #2962ff; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+        
+        /* LAYOUT */
+        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+        .header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 15px 25px; border-radius: 12px; border-bottom: 2px solid #333; }
+        
+        /* CARDS */
+        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; color: #bbb; font-size: 1.2rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
+
+        /* CONTROLS */
+        .status-indicator { font-weight: bold; padding: 5px 15px; border-radius: 20px; background: #333; color: #888; }
+        .status-running { background: rgba(0, 200, 83, 0.2); color: var(--green); border: 1px solid var(--green); box-shadow: 0 0 10px rgba(0, 200, 83, 0.4); }
+        .status-stopped { background: rgba(213, 0, 0, 0.2); color: var(--red); border: 1px solid var(--red); }
+
+        .btn { padding: 12px 24px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; color: white; }
+        .btn-start { background: var(--green); } .btn-start:hover { background: #009624; }
+        .btn-stop { background: var(--red); } .btn-stop:hover { background: #b71c1c; }
+        .btn-update { background: var(--blue); width: 100%; margin-top: 10px; }
+
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #888; font-size: 0.9rem; }
+        .input-group input, .input-group select { width: 100%; padding: 10px; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+
+        /* TABLE */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #333; }
+        th { color: #888; font-weight: 600; font-size: 0.9rem; }
+        tr:hover { background: #252525; }
+        .tag { padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .tag-ce { background: rgba(0, 200, 83, 0.15); color: var(--green); }
+        .tag-pe { background: rgba(213, 0, 0, 0.15); color: var(--red); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0; font-size:1.5rem;">🤖 Strategy Command Center</h1>
+                <small style="color:#666;">Automated OI-ATP System</small>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <span id="statusBadge" class="status-indicator status-stopped">STOPPED</span>
+                <button onclick="sendSignal('start')" class="btn btn-start">▶ START ENGINE</button>
+                <button onclick="sendSignal('stop')" class="btn btn-stop">⏹ STOP ENGINE</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>⚙️ Strategy Config</h2>
+            
+            <div class="input-group">
+                <label>Breathing Stoploss (%)</label>
+                <input type="number" id="slInput" step="0.01" value="0.10">
+                <small style="color:#666">0.10 = 10% of ATP</small>
+            </div>
+
+            <div class="input-group">
+                <label>Max Trades Per Side</label>
+                <select id="maxTradesInput">
+                    <option value="1">1 Trade</option>
+                    <option value="2" selected>2 Trades</option>
+                    <option value="3">3 Trades</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Trading Mode</label>
+                <select id="modeInput" style="border: 1px solid #f9a825; color: #f9a825;">
+                    <option value="true">📄 PAPER TRADING (Safe)</option>
+                    <option value="false">💰 REAL MONEY (Risk)</option>
+                </select>
+            </div>
+
+            <button onclick="updateConfig()" class="btn btn-update">💾 UPDATE SETTINGS</button>
+            <div id="configMsg" style="margin-top:10px; font-size:0.9rem; text-align:center;"></div>
+        </div>
+
+        <div class="card">
+            <h2>📡 Active Trades & Signals</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>TYPE</th>
+                        <th>STRIKE</th>
+                        <th>ENTRY PRICE</th>
+                        <th>CURRENT SL</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody id="tradeTable">
+                    <tr><td colspan="5" style="text-align:center; color:#555;">Waiting for data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // === THE WAITER LOGIC ===
+        
+        // 1. Poll Status every 1 second
+        setInterval(fetchStatus, 1000);
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/strategy/status');
+                const data = await res.json();
+                
+                // Update Badge
+                const badge = document.getElementById('statusBadge');
+                if (data.running) {
+                    badge.innerText = "RUNNING (" + data.state + ")";
+                    badge.className = "status-indicator status-running";
+                } else {
+                    badge.innerText = "STOPPED";
+                    badge.className = "status-indicator status-stopped";
+                }
+
+                // Update Table
+                const tbody = document.getElementById('tradeTable');
+                tbody.innerHTML = ""; // Clear old rows
+                
+                const allTrades = [...data.ce_trades, ...data.pe_trades];
+                
+                if (allTrades.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#555; padding:20px;">No Active Trades. Scanning Market...</td></tr>`;
+                } else {
+                    allTrades.forEach(t => {
+                        const row = `
+                            <tr>
+                                <td><span class="tag ${t.type === 'CE' ? 'tag-ce' : 'tag-pe'}">${t.type}</span></td>
+                                <td style="font-weight:bold;">${t.strike}</td>
+                                <td>${t.entry}</td>
+                                <td style="color: #f9a825;">${t.sl}</td>
+                                <td>Shield Active 🛡️</td>
+                            </tr>
+                        `;
+                        tbody.innerHTML += row;
+                    });
+                }
+
+            } catch (err) {
+                console.error("Connection lost:", err);
+            }
+        }
+
+        async function sendSignal(action) {
+            // action = 'start' or 'stop'
+            const res = await fetch(`/api/strategy/${action}`, { method: 'POST' });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function updateConfig() {
+            const sl = document.getElementById('slInput').value;
+            const max = document.getElementById('maxTradesInput').value;
+            const paper = document.getElementById('modeInput').value === "true";
+
+            const payload = {
+                sl_percentage: sl,
+                max_trades: max,
+                paper_mode: paper
+            };
+
+            const res = await fetch('/api/strategy/update-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const data = await res.json();
+            const msg = document.getElementById('configMsg');
+            msg.innerText = "✅ " + data.message;
+            setTimeout(() => msg.innerText = "", 3000);
+        }
+    </script>
+</body>
+</html>
