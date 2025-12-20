@@ -175,9 +175,23 @@ if (this.openWindows.has('indexPricesWindow')) {
         const minBtn = win.querySelector('.minimize-btn');
         if (minBtn) minBtn.addEventListener('click', () => this.toggleMinimize(win));
         
-        // Register for memory
-        this.windows.set('alertWindow', win);
-    }
+       // Register for memory
+this.windows.set('alertWindow', win);
+
+// ✅ Allow pressing Enter in price input to act like clicking Set
+const priceInput = document.querySelector('#alert-target-price');
+const setButton = document.querySelector('#btn-set-alert');
+
+if (priceInput && setButton) {
+    priceInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();   // stop default form submit
+            setButton.click();        // trigger Set button
+        }
+    });
+}
+}  // ← closing brace of setupAlertWindow()
+
     setupBasketWindow() {
     const win = document.getElementById('basketWindow');
     if (!win) return;

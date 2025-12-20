@@ -318,7 +318,11 @@ table tr:hover {
                         <option value="all">All Strikes</option>
                     </select>
                 </div>
-                
+                <label style="margin-left:12px; display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:600;">
+                   <input type="checkbox" id="oiAtpToggle">
+                   OI / ATP
+                </label>
+
                 <select id="productType">
                     <option value="NRML">NRML</option>
                     <option value="MIS">MIS</option>
@@ -756,15 +760,28 @@ table tr:hover {
         <hr style="border-color: #333; margin-bottom: 10px;">
         
         <div class="table-scroll-wrapper" style="height: 250px; overflow-y: auto; background: #1e1e1e;">
-            <table id="alertTable" class="orders-table" style="width: 100%;">
+            <table id="alertTable" class="orders-table" style="width: 100%; table-layout: fixed;">
+              <colgroup>
+                <col style="width: 30%;"> <!-- Symbol -->
+                <col style="width: 15%;"> <!-- LTP -->
+                <col style="width: 10%;"> <!-- Cond -->
+                <col style="width: 15%;"> <!-- Target -->
+                <col style="width: 20%;"> <!-- Status -->
+                <col style="width: 10%;"> <!-- Delete -->
+             </colgroup>
+ 
+
                 <thead style="position: sticky; top: 0; background: #2d2d30;">
                     <tr>
-                        <th style="padding: 5px;">Symbol</th>
-                        <th style="padding: 5px;">LTP</th>
-                        <th style="padding: 5px;">Cond</th>
-                        <th style="padding: 5px;">Target</th>
-                        <th style="padding: 5px;">X</th>
-                    </tr>
+    <th style="padding: 5px;">Symbol<div class="resizer"></div></th>
+    <th style="padding: 5px;">LTP<div class="resizer"></div></th>
+    <th style="padding: 5px;">Cond<div class="resizer"></div></th>
+    <th style="padding: 5px;">Target<div class="resizer"></div></th>
+    <th style="padding: 5px;">Status<div class="resizer"></div></th>
+    <th style="padding: 5px;">Delete<div class="resizer"></div></th>
+</tr>
+
+
                 </thead>
                 <tbody id="alert-list-body">
                     </tbody>

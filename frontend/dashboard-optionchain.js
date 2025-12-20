@@ -1,6 +1,7 @@
 let lastOCLogTime = 0;
 const OC_LOG_INTERVAL = 5 * 60 * 1000;
 
+window.showOIATP = false;
 
 
 class OptionChainManager {
@@ -216,6 +217,56 @@ this.fetchController.signal.addEventListener('abort', () => {
         const tRenderStart = performance.now();
 
         const tbody = document.getElementById('optionData');
+        const ceBidTh = document.querySelector('#optionTable th:nth-child(2)');
+        const ceAskTh = document.querySelector('#optionTable th:nth-child(3)');
+        const peBidTh = document.querySelector('#optionTable th:nth-child(7)');
+        const peAskTh = document.querySelector('#optionTable th:nth-child(8)');
+
+       const applyOIATPToggle = () => {
+    const showOI = window.showOIATP === true;
+
+    // ✅ HEADER CHANGE (ONLY ONCE)
+    if (showOI) {
+        if (ceBidTh) ceBidTh.textContent = 'Call ATP';
+        if (ceAskTh) ceAskTh.textContent = 'Call OI';
+        if (peBidTh) peBidTh.textContent = 'Put OI';
+        if (peAskTh) peAskTh.textContent = 'Put ATP';
+    } else {
+        if (ceBidTh) ceBidTh.textContent = 'Call Bid';
+        if (ceAskTh) ceAskTh.textContent = 'Call Ask';
+        if (peBidTh) peBidTh.textContent = 'Put Bid';
+        if (peAskTh) peAskTh.textContent = 'Put Ask';
+    }
+
+    // ✅ ROW DATA UPDATE
+    data.forEach(row => {
+        const ceBid = document.getElementById(`ce-bid-${row.strike}`);
+        const ceAsk = document.getElementById(`ce-ask-${row.strike}`);
+        const peBid = document.getElementById(`pe-bid-${row.strike}`);
+        const peAsk = document.getElementById(`pe-ask-${row.strike}`);
+
+        if (showOI) {
+            // CALL
+            if (ceBid) ceBid.textContent = row.call.atp ? parseFloat(row.call.atp).toFixed(2) : '-';
+            if (ceAsk) ceAsk.textContent = row.call.oi || '-';
+
+            // PUT
+            if (peBid) peBid.textContent = row.put.oi || '-';
+            if (peAsk) peAsk.textContent = row.put.atp ? parseFloat(row.put.atp).toFixed(2) : '-';
+        } else {
+            // CALL
+            if (ceBid) ceBid.textContent = parseFloat(row.call.bid).toFixed(2);
+            if (ceAsk) ceAsk.textContent = parseFloat(row.call.ask).toFixed(2);
+
+            // PUT
+            if (peBid) peBid.textContent = parseFloat(row.put.bid).toFixed(2);
+            if (peAsk) peAsk.textContent = parseFloat(row.put.ask).toFixed(2);
+        }
+    });
+};
+
+
+
         const loading = document.getElementById('loading');
         const optionTable = document.getElementById('optionTable');
 
@@ -253,12 +304,16 @@ window.optionChainData = data.map(row => ({
     strike: row.strike,
     optionType: 'CE',
     ltp: row.call.ltp,
+    oi: row.call.oi,
+    atp: row.call.atp,      // ✅ ADD
     change: row.call.change || 0
 })).concat(data.map(row => ({
     symbol: row.call.pTrdSymbol || row.put.pTrdSymbol,
     strike: row.strike,
     optionType: 'PE',
     ltp: row.put.ltp,
+    oi: row.put.oi,
+    atp: row.put.atp,       // ✅ ADD
     change: row.put.change || 0
 })));
        // Trigger LTP update for basket ONLY IF BASKET WINDOW IS OPEN
@@ -296,6 +351,8 @@ if (typeof updateBasketLTP === 'function' &&
                 </tr>`;
             }).join('');
                this.hasInitialLoad = true;
+               applyOIATPToggle();
+
         } else {
             data.forEach(row => {
                 updateCell(`ce-bid-${row.strike}`, row.call.bid);
@@ -321,6 +378,7 @@ if (typeof updateBasketLTP === 'function' &&
                     }
                 }
             });
+             applyOIATPToggle();
         }
      const tRenderEnd = performance.now();
      const now = Date.now();
@@ -334,6 +392,8 @@ if (typeof updateBasketLTP === 'function' &&
         const loading = document.getElementById('loading');
         const optionTable = document.getElementById('optionTable');
         const tbody = document.getElementById('optionData');
+        
+
 
         if (loading) {
             if (show) {
@@ -407,3 +467,9 @@ if (typeof updateBasketLTP === 'function' &&
 }
 
 window.OptionChainManager = OptionChainManager;
+document.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'oiAtpToggle') {
+        window.showOIATP = e.target.checked;
+    }
+});
+

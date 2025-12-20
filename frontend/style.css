@@ -570,3 +570,17 @@ button[title="Settings"] { font-size: 18px !important; }
     max-height: none !important;
     height: auto !important;
 }
+/* === Column Resizer Styles for Alert Table === */
+#alertTable th {
+  position: relative; /* allows the resizer to sit inside */
+}
+
+#alertTable .resizer {
+  width: 5px;
+  cursor: col-resize;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: #666; /* small visible bar */
+}
