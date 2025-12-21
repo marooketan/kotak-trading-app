@@ -14,7 +14,7 @@ import json
 import threading
 from strategy.engine import StrategyEngine
 import strategy.strategy_config as config
-
+import random
 import urllib.parse
 import time
 import uuid
@@ -834,6 +834,26 @@ class KotakNiftyAPI:
         except Exception as e:
             logger.error(f"Positions Logic Error: {e}")
             return {"success": False, "message": str(e)}
+
+    def get_demo_chain(self):
+        """Get demo chain data"""
+        try:
+            from strategy.demo_data import demo
+            chain = demo.get_chain()
+            
+            # Find highest OI
+            highest_ce = max(chain, key=lambda x: x["call"]["oi"])["strike"]
+            highest_pe = max(chain, key=lambda x: x["put"]["oi"])["strike"]
+            
+            return {
+                "success": True,
+                "data": chain,
+                "spot": demo.spot,
+                "highest_ce": highest_ce,
+                "highest_pe": highest_pe
+            }
+        except Exception as e:
+            return {"success": False, "message": str(e)}
     
     def get_order_book(self):
         if not self.current_user or self.current_user not in self.active_sessions:
@@ -986,7 +1006,7 @@ class KotakNiftyAPI:
             if kotak_status.upper() in k_statuses: return our_status
         return 'PENDING'
 
-    def modify_order(self, order_number: str, symbol: str, new_price: float = None, new_quantity: int = None, new_order_type: str = None, new_expiry: str = None) -> Dict:
+    def modify_order(self, order_number: str, symbol: str, new_price: float = None, new_quantity: int = None, new_order_type: str = None, new_expiry: str = None, new_trigger_price: float = None) -> Dict:
         if not self.current_user or self.current_user not in self.active_sessions:
             return {"success": False, "message": "Not logged in"}
         
@@ -1023,7 +1043,7 @@ class KotakNiftyAPI:
                 "ts": symbol, 
                 "tt": order_details.get('transaction_type', 'B'),
                 "pr": str(new_price) if new_price else order_details.get('price', '0'),
-                "tp": "0", 
+                "tp": str(new_trigger_price) if new_trigger_price else order_details.get('trigger_price', '0'), 
                 "qt": str(new_quantity) if new_quantity else order_details.get('quantity', '0'),
                 "no": str(order_number), 
                 "es": "nse_fo",
@@ -1055,7 +1075,7 @@ class KotakNiftyAPI:
         if not cancel_res.get("success"): return cancel_res
         return {"success": False, "message": "Expiry change requires full symbol map"}
 
-    def place_order(self, trading_symbol, transaction_type, quantity, product_code="NRML", price="0", order_type="MKT", validity="DAY", am_flag="NO", segment="NFO"):
+    def place_order(self, trading_symbol, transaction_type, quantity, product_code="NRML", price="0", order_type="MKT", validity="DAY", am_flag="NO", segment="NFO", trigger_price=None):
         from datetime import datetime
         current_time = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         
@@ -1165,23 +1185,74 @@ class KotakNiftyAPI:
         
         except Exception as ex: 
             return {"success": False, "message": str(ex)}
-   
+# ======================================================
+# 1. INITIALIZE API & ENGINE (MUST BE FIRST)
+# ======================================================
 kotak_api = KotakNiftyAPI()
-# CHANGED: We pass 'kotak_api' into the engine here!
+# Initialize cache on startup (Load BOTH to be ready)
+kotak_api.load_master_into_memory("NFO")
+kotak_api.load_master_into_memory("BFO")
+
+# Create the Engine
 bot_engine = StrategyEngine(kotak_api)
 bot_thread = None
-
 
 def run_engine_in_background():
     """Helper to run the loop without freezing the server"""
     bot_engine.start()
 
-# Initialize cache on startup (Load BOTH to be ready)
-kotak_api.load_master_into_memory("NFO")
-kotak_api.load_master_into_memory("BFO")
+# ======================================================
+# 2. LOGGING SYSTEM (Must be defined before app starts)
+# ======================================================
+LOG_BUFFER = []
+
+def add_system_log(message):
+    """Helper to save logs for the dashboard"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    LOG_BUFFER.append({"time": timestamp, "msg": message})
+    # Keep only last 50 logs to save memory
+    if len(LOG_BUFFER) > 50:
+        LOG_BUFFER.pop(0)
+    # Also print to black console so you don't lose it
+    print(f"[{timestamp}] {message}")
+
+# ======================================================
+# 3. LIFESPAN (Connects Brain to Mouth on Startup)
+# ======================================================
 @asynccontextmanager
-async def lifespan(app: FastAPI): yield
+async def lifespan(app: FastAPI):
+    # === STARTUP LOGIC (Runs once when server starts) ===
+    # 1. Connect the Logger (Hand over the microphone)
+    bot_engine.log_func = add_system_log
+    print("✅ LOGGER CONNECTED: Engine -> Dashboard")
+    
+    # 2. Force load config
+    import strategy.strategy_config as config
+    print(f"📊 Current Mode: {'DEMO' if config.USE_DEMO_DATA else 'LIVE'}")
+    
+    yield  # <--- The Server runs while pausing here
+    
+    # === SHUTDOWN LOGIC (Runs when you Ctrl+C) ===
+    print("🛑 Server Shutting Down...")
+
+# ======================================================
+# 4. CREATE APP (Now 'lifespan' is defined, so this works!)
+# ======================================================
 app = FastAPI(lifespan=lifespan)
+
+# ======================================================
+# 5. API ROUTES (Now 'app' is defined, so these work!)
+# ======================================================
+
+# === NEW: API TO FETCH LOGS ===
+@app.get("/api/logs")
+def get_logs():
+    return {"logs": LOG_BUFFER}
+
+# ... (The rest of your code, starting with @app.get("/api/users"), follows here) ...
+   
+
+
 # === PASTE THIS INTO main.py (Replacing the old API routes) ===
 @app.get("/api/users")
 def get_users_list():
@@ -1326,29 +1397,35 @@ def chain_api(expiry: str, strikes: str = "10", index: str = "NIFTY", segment: s
 def portfolio_api():
     return kotak_api.get_positions()
 # ======================================================
-# STRATEGY API (The "Waiter" for your Auto-Trader)
+# STRATEGY API ROUTES (The Waiter)
 # ======================================================
-
-
+# === REPLACEMENT FOR get_strategy_status ===
 @app.get("/api/strategy/status")
 def get_strategy_status():
-    """
-    UI asks: 'What is happening?'
-    API answers: Status, Active Trades, PnL
-    """
-    # Convert the internal trade objects to simple text for the UI
     ce_trades = []
     for t in bot_engine.active_ce_trades:
         ce_trades.append({
-            "strike": t.strike, "type": "CE", 
-            "entry": t.entry_price, "sl": t.sl_price, "pnl": 0 # We will calc PnL later
+            "strike": t.strike, 
+            "type": "CE", 
+            "entry": t.entry_price, 
+            "sl": t.sl_price, 
+            "pnl": t.pnl, 
+            "ltp": t.current_ltp,
+            "entry_time": int(t.entry_time),
+            "quantity": t.quantity  # <--- ADDED THIS LINE
         })
         
     pe_trades = []
     for t in bot_engine.active_pe_trades:
         pe_trades.append({
-            "strike": t.strike, "type": "PE", 
-            "entry": t.entry_price, "sl": t.sl_price, "pnl": 0
+            "strike": t.strike, 
+            "type": "PE", 
+            "entry": t.entry_price, 
+            "sl": t.sl_price, 
+            "pnl": t.pnl, 
+            "ltp": t.current_ltp,
+            "entry_time": int(t.entry_time),
+            "quantity": t.quantity  # <--- ADDED THIS LINE
         })
 
     return {
@@ -1356,52 +1433,100 @@ def get_strategy_status():
         "state": bot_engine.current_state.value,
         "ce_trades": ce_trades,
         "pe_trades": pe_trades,
-        "config": {
-            "sl_percentage": config.SL_PERCENTAGE,
-            "max_trades": config.MAX_OPEN_POSITIONS,
-            "paper_mode": config.PAPER_TRADING
-        }
+        "config": {"sl_percentage": config.SL_PERCENTAGE}
     }
-
+@app.post("/api/trades/{trade_id}/exit")
+def exit_single_trade(trade_id: str):
+    """Exit one specific trade"""
+    try:
+        # Use the GLOBAL bot_engine
+        all_trades = bot_engine.active_ce_trades + bot_engine.active_pe_trades
+        
+        for trade in all_trades:
+            # Create matching trade_id
+            current_trade_id = f"{trade.type}_{trade.strike}_{int(trade.entry_time)}"
+            
+            if current_trade_id == trade_id:
+                print(f"🚨 MANUAL EXIT REQUESTED for {trade.type} {trade.strike}")
+                
+                # Add cooldown for this strike (same as SL hit)
+                unlock_time = time.time() + config.COOLDOWN_SECONDS
+                bot_engine.cooldown_list[trade.strike] = unlock_time
+                print(f"   🧊 {trade.strike} is BANNED until {time.ctime(unlock_time)}")
+                
+                # Remove from active trades
+                if trade.type == "CE":
+                    bot_engine.active_ce_trades.remove(trade)
+                else:
+                    bot_engine.active_pe_trades.remove(trade)
+                
+                # Remove from memory
+                bot_engine.memory.remove_trade(trade_id)
+                
+                return {"success": True, "message": f"Trade {trade_id} exited"}
+        
+        return {"success": False, "message": "Trade not found"}
+    except Exception as e:
+        print(f"❌ Error in exit_single_trade: {e}")
+        return {"success": False, "message": str(e)}
 @app.post("/api/strategy/start")
 def start_strategy():
-    """UI says: 'Start the Engine!'"""
     global bot_thread
-    if bot_engine.is_running:
-        return {"success": False, "message": "Already running"}
-    
-    # Run in a separate thread so the website stays fast
+    if bot_engine.is_running: return {"success": False, "message": "Already running"}
     bot_thread = threading.Thread(target=run_engine_in_background)
-    bot_thread.daemon = True # Kills thread if main app closes
+    bot_thread.daemon = True
     bot_thread.start()
-    
     return {"success": True, "message": "Strategy Started"}
 
 @app.post("/api/strategy/stop")
 def stop_strategy():
-    """UI says: 'Stop!'"""
     bot_engine.stop()
     return {"success": True, "message": "Stop Signal Sent"}
 
+# === NEW: RESET BUTTON ===
+@app.post("/api/strategy/reset")
+def reset_strategy():
+    bot_engine.reset_memory()
+    return {"success": True, "message": "🧠 Brain Wiped Clean!"}
+
 @app.post("/api/strategy/update-config")
 async def update_config(request: Request):
-    """UI says: 'Change the rules'"""
     data = await request.json()
     
-    # Update the config variables in memory
-    if "sl_percentage" in data:
-        config.SL_PERCENTAGE = float(data["sl_percentage"])
+    # 1. Update Simple Settings
+    if "sl_percentage" in data: config.SL_PERCENTAGE = float(data["sl_percentage"])
+    if "max_trades" in data: config.MAX_OPEN_POSITIONS = int(data["max_trades"])
+    if "paper_mode" in data: config.PAPER_TRADING = bool(data["paper_mode"])
     
-    if "max_trades" in data:
-        config.MAX_OPEN_POSITIONS = int(data["max_trades"])
-        
-    if "paper_mode" in data:
-        config.PAPER_TRADING = bool(data["paper_mode"])
+    # 2. Update Time Settings
+    if "start_time" in data: config.START_TIME = data["start_time"]
+    if "end_time" in data: config.NO_NEW_ENTRY_TIME = data["end_time"]
+    if "exit_time" in data: config.SQUARE_OFF_TIME = data["exit_time"]
+    
+    # 3. Update Buffer Settings
+    if "min_buffer" in data: config.MIN_BUFFER_PERCENTAGE = float(data["min_buffer"]) / 100.0
+    if "max_buffer" in data: config.MAX_BUFFER_PERCENTAGE = float(data["max_buffer"]) / 100.0
+    # Add this line with other settings:
+    if "use_demo_data" in data: 
+        config.USE_DEMO_DATA = bool(data["use_demo_data"])
+    # 4. Update SL Interval
+    if "sl_interval" in data: config.SL_UPDATE_INTERVAL = int(data["sl_interval"]) * 60
+    # === ADD THIS NEW BLOCK HERE ===
+    if "lots_multiplier" in data: 
+        config.LOTS_MULTIPLIER = int(data["lots_multiplier"])
+        # Use your new log function here instead of print!
+        add_system_log(f"➤ Lot Multiplier Updated: x{config.LOTS_MULTIPLIER}")
+    # ===============================
 
-    return {"success": True, "message": "Config Updated"}
+    
+    # === NEW: CONSOLE CONFIRMATION ===
+    print(f"\n✅ CONFIG UPDATED SUCCESSFULLY:")
+    print(f"   ➤ Mode: {'PAPER' if config.PAPER_TRADING else 'REAL MONEY'}")
+    print(f"   ➤ Time: {config.START_TIME} to {config.NO_NEW_ENTRY_TIME} (Exit: {config.SQUARE_OFF_TIME})")
+    print(f"   ➤ Risk: SL {config.SL_PERCENTAGE*100}% | Buffers: {config.MIN_BUFFER_PERCENTAGE*100}% - {config.MAX_BUFFER_PERCENTAGE*100}%")
+    print("-" * 40)
 
-
-# --- CRITICAL FIX: Removed 'async' here ---
+    return {"success": True, "message": "Config Updated"}# --- CRITICAL FIX: Removed 'async' here ---
 @app.get("/api/order-book")
 def order_book_api():
     return kotak_api.get_order_book()
@@ -1543,7 +1668,30 @@ def lot_size(symbol: str = Query(...), segment: str = Query("NFO")):
     except:
         return {"success": True, "lot_size": 1}
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
-
+# DEMO MODE API
+@app.post("/api/demo/move-prices")
+def move_demo_prices():
+    """Move demo prices randomly"""
+    from strategy.demo_data import demo
+    
+    # Move spot
+    demo.spot += random.randint(-50, 50)
+    
+    # Get new chain
+    chain = demo.get_chain()
+    
+    # Find highest OI CE and PE
+    highest_ce = max(chain, key=lambda x: x["call"]["oi"])
+    highest_pe = max(chain, key=lambda x: x["put"]["oi"])
+    
+    return {
+        "success": True,
+        "data": chain,
+        "spot": demo.spot,
+        "highest_ce": highest_ce["strike"],
+        "highest_pe": highest_pe["strike"],
+        "message": "Prices moved!"
+    }
 
 
 if os.path.exists(frontend_path): app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

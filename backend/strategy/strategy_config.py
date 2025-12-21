@@ -2,37 +2,37 @@
 # STRATEGY SETTINGS (The Rulebook)
 # ==========================================
 
-# 1. Instrument Details
+# 1. Instrument
 SYMBOL = "NIFTY"
-EXPIRY_OFFSET = 0  # 0 = Current Week, 1 = Next Week
+EXPIRY_OFFSET = 0 
 
-# 2. Time Settings (in seconds)
-# How often to check Open Interest (Entry Scan)
-OI_CHECK_INTERVAL = 180  # 3 minutes
+# 2. Time Settings (Operating Hours)
+# Format: "HH:MM" (24-hour format)
+START_TIME = "09:15"
+NO_NEW_ENTRY_TIME = "14:00"
+SQUARE_OFF_TIME = "15:15"
 
-# How often to check Price (Entry Trigger)
-PRICE_CHECK_INTERVAL = 60  # 1 minute
+# 3. Loop Speeds (Seconds)
+OI_CHECK_INTERVAL = 60
+PRICE_CHECK_INTERVAL = 30
+# Stoploss Update: Default 5 minutes (300 sec)
+SL_UPDATE_INTERVAL = 300 
 
-# How often to recalculate the "Breathing" Stoploss?
-# (You requested: can be 1 min, 2 min, 5 min, etc.)
-SL_UPDATE_INTERVAL = 60  # 60 seconds = 1 minute
+# 4. Entry Logic (Buffers)
+# Min Buffer: Entry only if LTP < (ATP - Min%)
+MIN_BUFFER_PERCENTAGE = 0.05  # 5%
+# Max Buffer: Entry only if LTP > (ATP - Max%)
+MAX_BUFFER_PERCENTAGE = 0.20  # 20%
 
-# 3. Entry Rules
 OI_STABILITY_REQUIRED = 2
 
-# 4. Risk Management (The "Breathing" SL)
-# SL = Entry Price + (Current ATP * SL_PERCENTAGE)
-# Example: 0.10 means 10% of ATP
+# 5. Risk Management (The "Breathing" SL)
+# Formula: SL = ATP + (ATP * SL_PERCENTAGE)
+# THIS IS THE MISSING VARIABLE CAUSING YOUR ERROR 👇
 SL_PERCENTAGE = 0.10
-
-# 5. Portfolio Limits
-# How many open trades allowed PER SIDE at the same time?
-MAX_OPEN_POSITIONS = 2  # e.g., Max 2 CE and Max 2 PE allowed
-
-# 6. Cooldown Logic
-# If SL hits, how many seconds to ban that strike?
-# 900 seconds = 15 minutes
+LOTS_MULTIPLIER = 1
+# 6. Portfolio Limits
+MAX_OPEN_POSITIONS = 2
 COOLDOWN_SECONDS = 900
-
-# 7. Safety Switch
 PAPER_TRADING = True
+USE_DEMO_DATA = True  # Set to True for demo mode
