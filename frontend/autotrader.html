@@ -75,6 +75,36 @@
         }
         .log-entry { margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 2px; }
         .log-time { color: #666; margin-right: 5px; }
+        /* Add these new styles to your existing <style> section */
+.exited-trades {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+#exited-trades-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+#total-pnl {
+    font-weight: bold;
+    font-size: 1.2em;
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
+ .exited-trades-panel {
+    background: var(--card);
+    color: var(--text);
+}
+#exited-trades-list {
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 5px;
+}       
+
     </style>
 </head>
 <body>
@@ -172,12 +202,27 @@
             </div>
             
             <div style="margin-top: 10px;">
-                <button onclick="moveDemoPrices()" style="background:#ff9800; color:white; border:none; padding:8px; border-radius:4px; width:100%; font-size:0.8rem;">🔄 MOVE DEMO PRICES</button>
+               <button id="movePricesBtn" onclick="moveDemoPrices()" style="background:#ff9800; ...">
+    🔄 MOVE DEMO PRICES
+</button>
+
             </div>
         </div>
 
         <div class="card monitor-panel">
             <h2>📡 Live Trade Monitor</h2>
+           <div style="background: #2a2a2a; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <span style="color: #00e5ff; font-weight: bold;">💰 Live P&L:</span>
+            <span id="livePnL" style="font-size: 1.2rem; font-weight: bold; margin-left: 10px;">₹0</span>
+        </div>
+        <div>
+            <span style="color: #ff9100; font-weight: bold;">📊 Total P&L:</span>
+            <span id="totalPnL" style="font-size: 1.2rem; font-weight: bold; margin-left: 10px;">₹0</span>
+        </div>
+    </div>
+</div>
             <table>
                 <thead>
                     <tr>
@@ -192,7 +237,7 @@
                 </thead>
                 <tbody id="tradeTable">
                     <tr><td colspan="8" style="text-align:center; color:#555;">Waiting for data...</td></tr>
-                </tbody>
+                                </tbody>
             </table>
         </div>
 
@@ -202,63 +247,137 @@
                 <div class="log-entry"><span class="log-time">--:--</span> Waiting for logs...</div>
             </div>
         </div>
+        
     </div>
+          
+   <script>
+    // Initialize intervals
+    setInterval(fetchStatus, 1000);
+    setInterval(fetchLogs, 2000); // Poll logs every 2 seconds
+    setInterval(fetchTotalPnL, 2000); // Poll P&L every 2 seconds
 
-    <script>
-        setInterval(fetchStatus, 1000);
-        setInterval(fetchLogs, 2000); // Poll logs every 2 seconds
+    async function fetchStatus() {
+    try {
+        const res = await fetch('/api/strategy/status');
+        const data = await res.json();
 
-        async function fetchStatus() {
-            try {
-                const res = await fetch('/api/strategy/status');
-                const data = await res.json();
-                
-                const badge = document.getElementById('statusBadge');
-                if (data.running) {
-                    badge.innerText = "RUNNING (" + data.state + ")";
-                    badge.className = "status-indicator status-running";
-                } else {
-                    badge.innerText = "STOPPED";
-                    badge.className = "status-indicator status-stopped";
-                }
-
-                const tbody = document.getElementById('tradeTable');
-                tbody.innerHTML = ""; 
-                const allTrades = [...data.ce_trades, ...data.pe_trades];
-                
-                if (allTrades.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#555; padding:20px;">No Active Trades. Scanning...</td></tr>`;
-                } else {
-                    allTrades.forEach(t => {
-                        const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-                        tbody.innerHTML += `<tr>
-                                <td><span class="tag ${t.type === 'CE' ? 'tag-ce' : 'tag-pe'}">${t.type}</span></td>
-                                <td style="font-weight:bold; color:#ddd;">${t.quantity || '-'}</td> <td style="font-weight:bold;">${t.strike}</td>
-                                <td>${t.entry}</td>
-                                <td class="ltp-val">${t.ltp}</td>
-                                <td style="color: #f9a825;">${t.sl}</td>
-                                <td class="${pnlClass}">${t.pnl}</td>
-                                <td><button onclick="exitSingleTrade('${t.type}_${t.strike}_${t.entry_time}')" style="cursor:pointer; background:none; border:none;">❌</button></td>
-                                </tr>`;
-                    });
-                }
-            } catch (err) { console.error("Connection lost:", err); }
+        // Update status badge
+        const badge = document.getElementById('statusBadge');
+        if (data.running) {
+            badge.innerText = "RUNNING (" + data.state + ")";
+            badge.className = "status-indicator status-running";
+        } else {
+            badge.innerText = "STOPPED";
+            badge.className = "status-indicator status-stopped";
         }
 
-        async function fetchLogs() {
-            try {
-                const res = await fetch('/api/logs');
-                const data = await res.json();
-                if(data.logs && data.logs.length > 0) {
-                    const logBox = document.getElementById('logBox');
-                    logBox.innerHTML = data.logs.map(l => 
-                        `<div class="log-entry"><span class="log-time">[${l.time}]</span> ${l.msg}</div>`
-                    ).join('');
-                    // Auto scroll to bottom
-                    logBox.scrollTop = logBox.scrollHeight;
-                }
-            } catch(e) { }
+        // Combine active and exited trades
+        const tbody = document.getElementById('tradeTable');
+        tbody.innerHTML = "";
+
+        // 1. First show ACTIVE trades (your existing code)
+        const allActiveTrades = [...data.ce_trades, ...data.pe_trades];
+        if (allActiveTrades.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#555; padding:20px;">No Active Trades. Scanning...</td></tr>`;
+        } else {
+            allActiveTrades.forEach(t => {
+                const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+                tbody.innerHTML += `<tr>
+                    <td><span class="tag ${t.type === 'CE' ? 'tag-ce' : 'tag-pe'}">${t.type}</span></td>
+                    <td style="font-weight:bold; color:#ddd;">${t.quantity || '-'}</td>
+                    <td style="font-weight:bold;">${t.strike}</td>
+                    <td>${t.entry}</td>
+                    <td class="ltp-val">${t.ltp}</td>
+                    <td style="color: #f9a825;">${t.sl}</td>
+                    <td class="${pnlClass}">${t.pnl}</td>
+                    <td><button onclick="exitSingleTrade('${t.type}_${t.strike}_${t.entry_time}')" style="cursor:pointer; background:none; border:none;">❌</button></td>
+                </tr>`;
+            });
         }
+
+        // 2. Then show EXITED trades (NEW)
+        const exitedRes = await fetch('/api/exited_trades');
+        const exitedData = await exitedRes.json();
+
+        if (exitedData.exited_trades && exitedData.exited_trades.length > 0) {
+            // Add a separator row
+            tbody.innerHTML += `<tr style="background: #222;">
+                <td colspan="8" style="text-align:center; color:#888; padding:8px 0;">--- EXITED TRADES ---</td>
+            </tr>`;
+
+            // Add exited trades
+            exitedData.exited_trades.forEach(t => {
+                const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+                tbody.innerHTML += `<tr style="opacity: 0.7;">
+                    <td><span class="tag ${t.type === 'CE' ? 'tag-ce' : 'tag-pe'}">${t.type}</span></td>
+                    <td style="font-weight:bold; color:#888;">${t.quantity || '-'}</td>
+                    <td style="font-weight:bold; color:#888;">${t.strike}</td>
+                    <td style="color:#888;">${t.entry_price}</td>
+                    <td style="color:#888;">${t.exit_price}</td>
+                    <td style="color:#888;">-</td>
+                    <td class="${pnlClass}">${t.pnl}</td>
+                    <td style="color:#888;">✅ EXITED</td>
+                </tr>`;
+            });
+        }
+
+    } catch (err) {
+        console.error("Connection lost:", err);
+    }
+    // Calculate and display live P&L
+const livePnL = calculateLivePnL([...data.ce_trades, ...data.pe_trades]);
+const livePnLElement = document.getElementById('livePnL');
+livePnLElement.textContent = `₹${livePnL}`;
+livePnLElement.style.color = livePnL >= 0 ? '#00c853' : '#d50000';
+}
+
+    async function fetchLogs() {
+        try {
+            const res = await fetch('/api/logs');
+            const data = await res.json();
+            if(data.logs && data.logs.length > 0) {
+                const logBox = document.getElementById('logBox');
+                logBox.innerHTML = data.logs.map(l =>
+                    `<div class="log-entry"><span class="log-time">[${l.time}]</span> ${l.msg}</div>`
+                ).join('');
+                // Auto scroll to bottom
+                logBox.scrollTop = logBox.scrollHeight;
+            }
+        } catch(e) { }
+    }
+    // Helper to calculate live trades P&L
+    function calculateLivePnL(trades) {
+        return trades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+    } 
+   async function fetchTotalPnL() {
+    try {
+        // 1. Get exited trades P&L
+        const exitedRes = await fetch('/api/exited_trades');
+        const exitedData = await exitedRes.json();
+        const exitedPnL = exitedData.total_pnl || 0;
+
+        // 2. Get live trades P&L
+        const liveRes = await fetch('/api/strategy/status');
+        const liveData = await liveRes.json();
+        const liveTrades = [...liveData.ce_trades, ...liveData.pe_trades];
+        const livePnL = liveTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+
+        // 3. Calculate total P&L
+        const totalPnL = exitedPnL + livePnL;
+
+        // 4. Update display
+        const pnlElement = document.getElementById('totalPnL');
+        pnlElement.textContent = `₹${totalPnL}`;
+        pnlElement.style.color = totalPnL >= 0 ? '#00c853' : '#d50000';
+
+        // 5. Refresh the trade table
+        fetchStatus();
+    } catch (err) {
+        console.error("Failed to fetch P&L:", err);
+    }
+}
+
+    
 
         async function sendSignal(action) {
             const res = await fetch(`/api/strategy/${action}`, { method: 'POST' });
@@ -268,18 +387,22 @@
 
         async function updateConfig() {
             const payload = {
-                sl_percentage: document.getElementById('slInput').value,
-                max_trades: document.getElementById('maxTradesInput').value,
-                paper_mode: document.getElementById('modeInput').value === "true",
-                start_time: document.getElementById('startTime').value,
-                end_time: document.getElementById('noEntryTime').value,
-                exit_time: document.getElementById('exitTime').value,
-                min_buffer: document.getElementById('minBuffer').value,
-                max_buffer: document.getElementById('maxBuffer').value,
-                sl_interval: document.getElementById('slInterval').value,
-                lots_multiplier: document.getElementById('lotInput').value, // NEW INPUT
-                use_demo_data: (currentMode === "DEMO")
-            };
+    sl_percentage: parseFloat(document.getElementById('slInput').value),
+    min_buffer: parseFloat(document.getElementById('minBuffer').value),
+    max_buffer: parseFloat(document.getElementById('maxBuffer').value),
+
+    sl_interval: parseInt(document.getElementById('slInterval').value),
+    max_trades: parseInt(document.getElementById('maxTradesInput').value),
+    lots_multiplier: parseInt(document.getElementById('lotInput').value),
+
+    paper_mode: document.getElementById('modeInput').value === "true",
+    start_time: document.getElementById('startTime').value,
+    end_time: document.getElementById('noEntryTime').value,
+    exit_time: document.getElementById('exitTime').value,
+
+    use_demo_data: (currentMode === "DEMO")
+};
+
             const res = await fetch('/api/strategy/update-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -329,37 +452,67 @@
         }
         // ... (after switchToDemo function) ...
 
-        async function moveDemoPrices() {
-            // 1. Check Mode
-            if (currentMode !== "DEMO") {
-                alert('⚠️ Switch to DEMO MODE first!');
-                return;
-            }
+        // ===== DEMO PRICE MOVE =====
+async function moveDemoPrices() {
+    if (currentMode !== "DEMO") {
+        alert('⚠️ Switch to DEMO MODE first!');
+        return;
+    }
 
-            // 2. Find the button and change text (VISUAL FEEDBACK)
-            // We search for the button that calls this function
-            const btn = document.querySelector('button[onclick="moveDemoPrices()"]');
-            const originalText = btn.innerText;
-            
-            btn.innerText = "⏳ MOVING...";
-            btn.style.opacity = "0.6"; // Dim the button
+    const btn = document.getElementById("movePricesBtn");
+    const originalText = btn.innerText;
 
-            try {
-                // 3. Call the API
-                const response = await fetch('/api/demo/move-prices', { method: 'POST' });
-                const result = await response.json();
-                
-                // 4. Log success (No popup needed, the text change is enough)
-                console.log("Prices Moved:", result);
+    btn.innerText = "⏳ MOVING...";
+    btn.style.opacity = "0.6";
 
-            } catch (error) {
-                alert('❌ Error: ' + error);
-            } finally {
-                // 5. Reset Button Text (So you know it finished)
-                btn.innerText = originalText;
-                btn.style.opacity = "1";
-            }
-        }
+    try {
+        await fetch('/api/demo/move-prices', { method: 'POST' });
+    } catch (e) {
+        alert('❌ Error moving demo prices');
+    } finally {
+        setTimeout(() => {
+            btn.innerText = originalText;
+            btn.style.opacity = "1";
+        }, 1000);
+    }
+}
+
+
+// Initialize
+//fetchExitedTrades();
+setInterval(fetchExitedTrades, 2000);
+
+// ===== LOAD CONFIG ON PAGE LOAD =====
+async function loadConfigFromBackend() {
+    const res = await fetch('/api/strategy/config');
+    const data = await res.json();
+    if (!data.success) return;
+
+    const c = data.config;
+
+    document.getElementById('startTime').value = c.start_time;
+    document.getElementById('noEntryTime').value = c.no_new_entry_time;
+    document.getElementById('exitTime').value = c.square_off_time;
+
+    document.getElementById('minBuffer').value = c.min_buffer;
+    document.getElementById('maxBuffer').value = c.max_buffer;
+
+    document.getElementById('slInput').value = c.sl_percentage;
+    document.getElementById('slInterval').value = c.sl_interval;
+    document.getElementById('maxTradesInput').value = c.max_trades;
+    document.getElementById('lotInput').value = c.lots_multiplier;
+
+    document.getElementById('modeInput').value = c.paper_trading ? "true" : "false";
+
+    currentMode = c.use_demo_data ? "DEMO" : "LIVE";
+    document.getElementById('demoBtn').style.background = c.use_demo_data ? '#ff9800' : '#666';
+    document.getElementById('liveBtn').style.background = c.use_demo_data ? '#666' : '#00c853';
+}
+
+// VERY IMPORTANT
+window.onload = loadConfigFromBackend;
+
+
     </script>
 </body>
 </html>
