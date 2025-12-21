@@ -1,0 +1,405 @@
+import time
+import sys
+import os
+import datetime
+import strategy.strategy_config as config
+from strategy.state import StrategyState
+from database.memory_helper import TradeMemory
+from strategy.oi_tracker import OITracker
+from strategy.demo_data import DemoMarket
+demo = DemoMarket()
+
+
+# === THE TRADE FILE FOLDER ===
+class Trade:
+    def __init__(self, strike, type, entry_price, sl_price, entry_time, order_id=None, sl_order_id=None):
+        self.strike = strike
+        self.type = type
+        self.entry_price = entry_price
+        self.sl_price = sl_price
+        self.entry_time = entry_time
+        self.pnl = 0.0
+        self.current_ltp = entry_price 
+        self.entry_order_id = order_id
+        self.sl_order_id = sl_order_id
+        self.quantity = 0 
+
+class StrategyEngine:
+    def __init__(self, api_instance, log_callback=None):
+        print("⚙️ Initializing Portfolio Manager...")
+        self.api = api_instance
+        self.log_func = log_callback
+        self.current_state = StrategyState.IDLE
+        self.tracker = OITracker()
+        self.is_running = False
+        
+        self.active_ce_trades = []
+        self.active_pe_trades = []
+        self.exited_trades = []  # Stores all closed trades
+        self.cooldown_list = {}
+        self.last_sl_update_time = time.time()
+        self.memory = TradeMemory()
+
+    def log_message(self, msg):
+        """Sends logs to both Console (Black Box) and Dashboard (Web)"""
+        if self.log_func:
+            self.log_func(msg)
+        else:
+            timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+            print(f"[{timestamp}] {msg}")
+
+    # === TIME HELPERS ===
+    def get_current_time_str(self):
+        return datetime.datetime.now().strftime("%H:%M")
+
+    def is_time_between(self, start_str, end_str):
+        now = datetime.datetime.now().time()
+        start = datetime.datetime.strptime(start_str, "%H:%M").time()
+        end = datetime.datetime.strptime(end_str, "%H:%M").time()
+        return start <= now <= end
+
+    def is_after_time(self, target_time_str):
+        now = datetime.datetime.now().time()
+        target = datetime.datetime.strptime(target_time_str, "%H:%M").time()
+        return now >= target
+
+    def reset_memory(self):
+        self.log_message("🧹 CLEARING BRAIN MEMORY...")
+        self.active_ce_trades = []
+        self.active_pe_trades = []
+        self.exited_trades = []  # Clear exited trades on reset
+        self.cooldown_list = {}
+        self.tracker = OITracker()
+        return True
+
+    def start(self):
+        self.log_message(">>> Strategy Engine STARTED.")
+        self.is_running = True
+        
+        self.api.load_session_from_disk()
+        if not self.api.current_user:
+            self.log_message("⚠️ Engine Stopped: No User Logged In.")
+            self.stop()
+            return
+
+        try:
+            while self.is_running:
+                current_str = self.get_current_time_str()
+                current_time = time.time()
+                
+                # 1. CHECK SQUARE OFF TIME
+                if self.is_after_time(config.SQUARE_OFF_TIME):
+                    self.log_message(f"⏰ SQUARE OFF TIME REACHED ({config.SQUARE_OFF_TIME}). Closing All Positions.")
+                    self.square_off_all()
+                    time.sleep(10) 
+                    continue
+
+                # 2. CHECK START TIME
+                if not self.is_after_time(config.START_TIME):
+                    print(f"⏳ Market Open. Waiting for Start Time: {config.START_TIME} (Current: {current_str})")
+                    time.sleep(60)
+                    continue
+
+                self.manage_active_trades(current_time)
+                
+                # 3. CHECK ENTRY DEADLINE
+                if self.is_time_between(config.START_TIME, config.NO_NEW_ENTRY_TIME):
+                    self.scan_market(current_time)
+                else:
+                    print(f"⛔ No New Entries allowed after {config.NO_NEW_ENTRY_TIME}.")
+
+                # CHANGED: Show waiting message in LOGS now
+                self.log_message(f"⏳ Waiting {config.PRICE_CHECK_INTERVAL} seconds...")
+                time.sleep(config.PRICE_CHECK_INTERVAL)
+
+        except KeyboardInterrupt:
+            self.stop()
+        except Exception as e:
+            self.log_message(f"❌ CRITICAL ERROR: {e}")
+            self.stop()
+
+    def stop(self):
+        self.log_message(">>> Strategy Engine STOPPED.")
+        self.is_running = False
+        self.current_state = StrategyState.STOPPED
+
+    def get_data_for_strike(self, chain_data, strike):
+        for row in chain_data:
+            if row['strike'] == strike: return row
+        return None
+
+    # === EXECUTION HANDLERS ===
+    def execute_broker_entry(self, symbol, type, quantity):
+        if config.PAPER_TRADING:
+            return "PAPER_ORD_" + str(int(time.time()))
+        
+        self.log_message(f"💸 SENDING ORDER: SELL {symbol} | Qty: {quantity}")
+        res = self.api.place_order(trading_symbol=symbol, transaction_type="S", quantity=quantity, product_code="NRML", order_type="MKT")
+        
+        if res.get("success"): return res.get("order_number")
+        self.log_message(f"❌ REJECTED: {res.get('message')}")
+        return None
+
+    def execute_broker_sl(self, symbol, type, quantity, sl_price):
+        if config.PAPER_TRADING:
+            return "PAPER_SL_" + str(int(time.time()))
+        
+        trigger_val = sl_price 
+        limit_val = round(sl_price + 0.5, 1)
+        self.log_message(f"🛡️ PLACING SL: {symbol} | Trig: {trigger_val}")
+        
+        res = self.api.place_order(trading_symbol=symbol, transaction_type="B", quantity=quantity, product_code="NRML", order_type="SL", price=str(limit_val), trigger_price=str(trigger_val))
+        if res.get("success"): return res.get("order_number")
+        return None
+
+    def modify_broker_sl(self, order_id, new_price, symbol):
+        if config.PAPER_TRADING:
+            self.log_message(f"📝 [PAPER] Modified SL {order_id} to {new_price}")
+            return True
+        
+        self.log_message(f"🔄 MODIFYING SL #{order_id} -> {new_price}")
+        res = self.api.modify_order(order_number=order_id, symbol=symbol, new_price=str(round(new_price + 0.5, 1)), new_order_type="SL", new_trigger_price=str(new_price))
+        return res.get("success")
+
+    def exit_broker_trade(self, trade):
+        if not config.PAPER_TRADING and trade.sl_order_id:
+            self.log_message(f"🗑️ Cancelling SL Order #{trade.sl_order_id}")
+            self.api.cancel_order(trade.sl_order_id)
+        pass
+
+    def verify_order_status(self, order_id):
+        try:
+            order_book = self.api.get_order_book()
+            if not order_book.get("success"): return "UNKNOWN"
+            data = order_book.get("data", [])
+            for order in data:
+                if str(order.get("nOrdNo")) == str(order_id):
+                    return order.get("ordSt", "UNKNOWN")
+            return "NOT_FOUND"
+        except: return "ERROR"
+
+    def square_off_all(self):
+        all_trades = self.active_ce_trades + self.active_pe_trades
+        for trade in all_trades:
+            self.log_message(f"🚨 SQUARE OFF: Exiting {trade.strike}...")
+            if not config.PAPER_TRADING and trade.sl_order_id:
+                self.api.cancel_order(trade.sl_order_id)
+        self.reset_memory()
+
+    # === MANAGING TRADES ===
+    def manage_active_trades(self, current_time):
+        should_update_sl = (current_time - self.last_sl_update_time) >= config.SL_UPDATE_INTERVAL
+        
+        if should_update_sl:
+            self.last_sl_update_time = current_time
+
+        all_trades = self.active_ce_trades + self.active_pe_trades
+        if not all_trades: return
+
+        # === DATA SOURCE (DEMO vs LIVE) ===
+        if config.USE_DEMO_DATA:
+            chain = demo.get_chain()
+        else:
+            expiries = self.api.get_expiries("NIFTY", "NFO")
+            if not expiries: return
+            data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
+            if not data or not data.get("success"): return
+            chain = data.get("data", [])
+
+
+        for trade in all_trades:
+            row = self.get_data_for_strike(chain, trade.strike)
+            if not row: continue
+            
+            key = 'call' if trade.type == "CE" else 'put'
+            try:
+                ltp = float(row[key].get('ltp', 0))
+                atp = float(row[key].get('atp', 0))
+            except: continue
+            
+            symbol = row.get("pTrdSymbol")
+            trade.current_ltp = ltp
+            trade.pnl = round((trade.entry_price - ltp) * trade.quantity, 2)
+            
+            # SL CHECK
+            if ltp > trade.sl_price:
+                self.log_message(f"💥 STOPLOSS HIT! {trade.type} {trade.strike} @ {ltp}")
+                self.close_trade(trade, "SL HIT", current_time)
+                continue 
+
+            # BREATHING UPDATE
+            if should_update_sl:
+                potential_new_sl = atp + (atp * config.SL_PERCENTAGE)
+                potential_new_sl = round(potential_new_sl, 2)
+
+                if potential_new_sl < trade.sl_price:
+                    self.log_message(f"📉 Tightening SL: {trade.sl_price} -> {potential_new_sl}")
+                    trade.sl_price = potential_new_sl
+                    if trade.sl_order_id:
+                        self.modify_broker_sl(trade.sl_order_id, potential_new_sl, symbol)
+
+    def close_trade(self, trade, reason, current_time):
+        # Save exited trade to memory
+        self.exited_trades.append(trade)
+        self.log_message(f"❌ CLOSING TRADE: {trade.type} {trade.strike} [{reason}]")
+        self.exit_broker_trade(trade)
+        if trade.type == "CE": self.active_ce_trades.remove(trade)
+        else: self.active_pe_trades.remove(trade)
+        
+        trade_id_to_remove = f"{trade.type}_{trade.strike}_{int(trade.entry_time)}"
+        self.memory.remove_trade(trade_id_to_remove)
+        
+        unlock_time = current_time + config.COOLDOWN_SECONDS
+        self.cooldown_list[trade.strike] = unlock_time
+        self.log_message(f"🧊 {trade.strike} is in Cooldown until {time.ctime(unlock_time)}")
+
+    def scan_market(self, current_time):
+        self.log_message(f"🔎 Scanning Market at {time.strftime('%H:%M:%S')}...")
+        
+        # DEMO MODE
+        try:
+            if config.USE_DEMO_DATA:
+                self.log_message("🎮 USING DEMO DATA")
+                chain = demo.get_chain()   # 👈 use your DemoMarket class
+                demo.increment_entry()
+                self.log_message(f"🎮 DEMO entry_count = {demo.entry_count}")
+
+                spot = demo.spot
+
+                best_ce = 22100   # or pick from demo.spot + 100
+                best_pe = 21800   # or pick from demo.spot - 100
+        
+                # 1. Show the "Missing" Prices
+                self.log_message(f"📈 DEMO Spot: {spot}")
+                self.log_message(f"📊 Highest OI -> CE: {best_ce} | PE: {best_pe}")
+        
+                # 2. DEMO SHORTCUT: Skip stability check so you see logs instantly!
+                if len(self.active_ce_trades) < config.MAX_OPEN_POSITIONS:
+                    if best_ce in self.cooldown_list and current_time < self.cooldown_list[best_ce]:
+                        self.log_message(f"   🧊 CE {best_ce} is in Cooldown.")
+                    else:
+                        # ALWAYS check entry in Demo (Ignore Stability)
+                        self.check_entry(chain, best_ce, "CE", current_time)
+        
+                if len(self.active_pe_trades) < config.MAX_OPEN_POSITIONS:
+                    if best_pe in self.cooldown_list and current_time < self.cooldown_list[best_pe]:
+                        self.log_message(f"   🧊 PE {best_pe} is in Cooldown.")
+                    else:
+                        # ALWAYS check entry in Demo (Ignore Stability)
+                        self.check_entry(chain, best_pe, "PE", current_time)
+        
+                return 
+        except Exception as e:
+            self.log_message(f"⚠️ Demo mode failed: {e}")
+        
+        
+        # REAL MARKET (Keep Stability Check Here for Safety!)
+        expiries = self.api.get_expiries("NIFTY", "NFO")
+        chain = demo.get_chain()
+
+        if not expiries: return
+        data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
+        if not data or not data.get("success"): return
+        chain = data.get("data", [])
+        spot = data.get("spot", 0)
+        
+        # Log Real Spot too
+        print(f"📈 NIFTY Spot: {spot}") 
+
+        best_ce, best_pe = self.tracker.find_highest_oi(chain)
+        self.log_message(f"📊 Highest OI -> CE: {best_ce} | PE: {best_pe}")
+        report = self.tracker.check_stability(best_ce, best_pe)
+
+        if len(self.active_ce_trades) < config.MAX_OPEN_POSITIONS:
+            if best_ce in self.cooldown_list and current_time < self.cooldown_list[best_ce]:
+                 self.log_message(f"   🧊 CE {best_ce} is in Cooldown.")
+            elif report['ce_stable']: self.check_entry(chain, best_ce, "CE", current_time)
+            else: self.log_message(f"   ⏳ CE {best_ce}: Waiting for stability.")
+
+        if len(self.active_pe_trades) < config.MAX_OPEN_POSITIONS:
+            if best_pe in self.cooldown_list and current_time < self.cooldown_list[best_pe]:
+                 self.log_message(f"   🧊 PE {best_pe} is in Cooldown.")
+            elif report['pe_stable']: self.check_entry(chain, best_pe, "PE", current_time)
+            else: self.log_message(f"   ⏳ PE {best_pe}: Waiting for stability.")
+  
+    def check_entry(self, chain, strike, type, current_time):
+        active_list = self.active_ce_trades if type == "CE" else self.active_pe_trades
+        for t in active_list:
+            if t.strike == strike: return
+
+        row = self.get_data_for_strike(chain, strike)
+        if not row: return
+        key = 'call' if type == "CE" else 'put'
+        try:
+            ltp = float(row[key].get('ltp', 0))
+            atp = float(row[key].get('atp', 0))
+            oi = float(row[key].get('oi', 0))
+        except ValueError: return
+        symbol = row.get("pTrdSymbol")
+        
+        # Buffer Checks
+        max_allowed_price = atp - (atp * config.MIN_BUFFER_PERCENTAGE)
+        min_allowed_price = atp - (atp * config.MAX_BUFFER_PERCENTAGE)
+        
+        # CHANGED: Log the check details
+        self.log_message(
+    f" ➤ {type} {strike} Check: LTP {ltp} vs Buffer {min_allowed_price:.1f}-{max_allowed_price:.1f} | ATP {atp} | OI {oi}"
+)
+
+        
+        if ltp < max_allowed_price and ltp > min_allowed_price:
+            self.log_message(f"🚀 EXECUTION SIGNAL: {type} {strike} @ {ltp}")
+            
+            qty = 75 
+            try:
+                if hasattr(self.api, 'nfo_master_df') and self.api.nfo_master_df is not None:
+                    df = self.api.nfo_master_df
+                    found_row = df[df['pTrdSymbol'].astype(str).str.strip() == symbol]
+                    if not found_row.empty: 
+                        raw_lot_size = int(found_row.iloc[0]['lLotSize'])
+                        qty = raw_lot_size * config.LOTS_MULTIPLIER
+                        self.log_message(f"🧮 Quantity Calc: {raw_lot_size} (Lot) x {config.LOTS_MULTIPLIER} (Mult) = {qty}")
+            except Exception as e:
+                self.log_message(f"⚠️ Quantity Error: {e}. Using default 25.")
+
+            order_id = self.execute_broker_entry(symbol, type, qty)
+            
+            if order_id:
+                if not config.PAPER_TRADING:
+                    self.log_message("⏳ Waiting 2s for Broker...")
+                    time.sleep(2)
+                    status = self.verify_order_status(order_id)
+                    if "REJECTED" in status.upper():
+                        self.log_message(f"❌ ORDER REJECTED.")
+                        return
+
+                sl_val = atp + (atp * config.SL_PERCENTAGE)
+                initial_sl = round(sl_val, 2)
+                
+                time.sleep(1) 
+                sl_id = self.execute_broker_sl(symbol, type, qty, initial_sl)
+
+                new_trade = Trade(strike, type, ltp, initial_sl, current_time, order_id, sl_id)
+                new_trade.quantity = qty 
+                
+                trade_dict = {
+                    "trade_id": f"{type}_{strike}_{int(current_time)}",
+                    "symbol": symbol,
+                    "option_type": type,
+                    "strike": strike,
+                    "entry_price": ltp,
+                    "entry_time": datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m-%d %H:%M:%S"),
+                    "quantity": qty,
+                    "stoploss": initial_sl,
+                    "atp_at_entry": atp
+                }
+                self.memory.save_trade(trade_dict)
+                
+                if type == "CE": self.active_ce_trades.append(new_trade)
+                else: self.active_pe_trades.append(new_trade)
+                
+                self.log_message(f"✅ Trade Active: {type} {strike} | Qty: {qty} | SL: {initial_sl}")
+        else:
+            # We don't log "No Entry" to avoid flooding the dashboard, 
+            # but we DO log the check above so you see it scanning.
+            pass
