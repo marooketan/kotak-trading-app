@@ -5,117 +5,214 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚡ Kotak Auto-Trader</title>
     <style>
-        :root { --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --green: #00c853; --red: #d50000; --blue: #2962ff; }
-        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+        :root { --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --green: #00c853; --red: #d50000; --blue: #2962ff; --purple: #d500f9; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; }
         
-        /* LAYOUT */
-        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
-        .header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 15px 25px; border-radius: 12px; border-bottom: 2px solid #333; }
-        
-        /* CARDS */
-        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h2 { margin-top: 0; color: #bbb; font-size: 1.2rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        /* --- CHANGED: 98% Width & 3-Column Grid --- */
+        .container { 
+            width: 98%; 
+            margin: 0 auto; 
+            display: grid; 
+            grid-template-columns: 320px 1fr 350px; /* Left, Middle, Right */
+            gap: 15px; 
+            height: 95vh;
+        }
 
-        /* CONTROLS */
-        .status-indicator { font-weight: bold; padding: 5px 15px; border-radius: 20px; background: #333; color: #888; }
-        .status-running { background: rgba(0, 200, 83, 0.2); color: var(--green); border: 1px solid var(--green); box-shadow: 0 0 10px rgba(0, 200, 83, 0.4); }
+        /* Responsive: On smaller laptops, move logs to bottom or stack */
+        @media (max-width: 1400px) {
+            .container { grid-template-columns: 300px 1fr; } /* Hide 3rd column or move it? For now 2 cols */
+            .log-column { grid-column: 1 / -1; } /* Logs drop to bottom full width */
+        }
+
+        .header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 10px 20px; border-radius: 8px; border-bottom: 2px solid #333; margin-bottom: 5px; }
+        
+        .card { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); overflow-y: auto; }
+        
+        /* Make panels fill height */
+        .settings-panel { height: calc(100vh - 100px); }
+        .monitor-panel { height: calc(100vh - 100px); }
+        .log-panel { height: calc(100vh - 100px); display: flex; flex-direction: column; }
+
+        h2 { margin-top: 0; color: #bbb; font-size: 1.1rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .status-indicator { font-weight: bold; padding: 5px 15px; border-radius: 20px; background: #333; color: #888; font-size: 0.9rem; }
+        .status-running { background: rgba(0, 200, 83, 0.2); color: var(--green); border: 1px solid var(--green); }
         .status-stopped { background: rgba(213, 0, 0, 0.2); color: var(--red); border: 1px solid var(--red); }
-
-        .btn { padding: 12px 24px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; color: white; }
-        .btn-start { background: var(--green); } .btn-start:hover { background: #009624; }
-        .btn-stop { background: var(--red); } .btn-stop:hover { background: #b71c1c; }
-        .btn-update { background: var(--blue); width: 100%; margin-top: 10px; }
-
-        .input-group { margin-bottom: 15px; }
-        .input-group label { display: block; margin-bottom: 5px; color: #888; font-size: 0.9rem; }
-        .input-group input, .input-group select { width: 100%; padding: 10px; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
-
-        /* TABLE */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #333; }
-        th { color: #888; font-weight: 600; font-size: 0.9rem; }
+        
+        .btn { padding: 8px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; font-size: 0.9rem; }
+        .btn-start { background: var(--green); }
+        .btn-stop { background: var(--red); }
+        .btn-reset { background: var(--purple); }
+        .btn-update { background: var(--blue); width: 100%; margin-top: 10px; padding: 10px; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .input-group { margin-bottom: 8px; }
+        .input-group label { display: block; margin-bottom: 3px; color: #888; font-size: 0.8rem; }
+        .input-group input, .input-group select { width: 100%; padding: 6px; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; font-size: 0.9rem; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; }
+        th { color: #888; font-weight: 600; }
         tr:hover { background: #252525; }
-        .tag { padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .tag { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
         .tag-ce { background: rgba(0, 200, 83, 0.15); color: var(--green); }
         .tag-pe { background: rgba(213, 0, 0, 0.15); color: var(--red); }
+        .pnl-pos { color: var(--green); font-weight: bold; }
+        .pnl-neg { color: var(--red); font-weight: bold; }
+        .ltp-val { color: #00e5ff; font-weight: bold; }
+
+        /* --- NEW LOG STYLES --- */
+        #logBox {
+            flex-grow: 1;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            color: #0f0;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 2px; }
+        .log-time { color: #666; margin-right: 5px; }
     </style>
 </head>
 <body>
+    <div class="header">
+        <div>
+            <h1 style="margin:0; font-size:1.3rem;">⚡ Strategy Command Center</h1>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span id="statusBadge" class="status-indicator status-stopped">STOPPED</span>
+            <button onclick="sendSignal('start')" class="btn btn-start">▶ START</button>
+            <button onclick="sendSignal('stop')" class="btn btn-stop">⏹ STOP</button>
+            <button onclick="sendSignal('reset')" class="btn btn-reset">🧠 CLEAR</button>
+        </div>
+    </div>
 
     <div class="container">
-        <div class="header">
-            <div>
-                <h1 style="margin:0; font-size:1.5rem;">🤖 Strategy Command Center</h1>
-                <small style="color:#666;">Automated OI-ATP System</small>
-            </div>
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <span id="statusBadge" class="status-indicator status-stopped">STOPPED</span>
-                <button onclick="sendSignal('start')" class="btn btn-start">▶ START ENGINE</button>
-                <button onclick="sendSignal('stop')" class="btn btn-stop">⏹ STOP ENGINE</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>⚙️ Strategy Config</h2>
+        <div class="card settings-panel">
+            <h2>⚙️ Config</h2>
             
-            <div class="input-group">
-                <label>Breathing Stoploss (%)</label>
-                <input type="number" id="slInput" step="0.01" value="0.10">
-                <small style="color:#666">0.10 = 10% of ATP</small>
+            <div style="color: #00e5ff; font-weight: bold; margin-bottom: 5px; font-size: 0.8rem;">🕒 OPERATING HOURS</div>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Start Time</label>
+                    <input type="time" id="startTime" value="09:15">
+                </div>
+                <div class="input-group">
+                    <label>No New Entries</label>
+                    <input type="time" id="noEntryTime" value="14:00">
+                </div>
             </div>
 
-            <div class="input-group">
-                <label>Max Trades Per Side</label>
-                <select id="maxTradesInput">
-                    <option value="1">1 Trade</option>
-                    <option value="2" selected>2 Trades</option>
-                    <option value="3">3 Trades</option>
-                </select>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Exit All Time</label>
+                    <input type="time" id="exitTime" value="15:15">
+                </div>
+                <div class="input-group">
+                    <label>Lot Multiplier (x)</label>
+                    <input type="number" id="lotInput" value="1" min="1" step="1" style="border-color: #00e5ff;">
+                </div>
             </div>
 
-            <div class="input-group">
-                <label>Trading Mode</label>
-                <select id="modeInput" style="border: 1px solid #f9a825; color: #f9a825;">
-                    <option value="true">📄 PAPER TRADING (Safe)</option>
-                    <option value="false">💰 REAL MONEY (Risk)</option>
-                </select>
+            <div style="color: #ff9100; font-weight: bold; margin-bottom: 5px; margin-top: 10px; font-size: 0.8rem;">📉 ENTRY BUFFERS</div>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Min Buffer %</label>
+                    <input type="number" id="minBuffer" step="0.5" value="5">
+                </div>
+                <div class="input-group">
+                    <label>Max Buffer %</label>
+                    <input type="number" id="maxBuffer" step="0.5" value="20">
+                </div>
+            </div>
+
+            <div style="color: #00c853; font-weight: bold; margin-bottom: 5px; margin-top: 10px; font-size: 0.8rem;">🛡️ RISK MANAGEMENT</div>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Stoploss (ATP+%)</label>
+                    <input type="number" id="slInput" step="0.01" value="0.10">
+                </div>
+                <div class="input-group">
+                    <label>Update SL (Min)</label>
+                    <select id="slInterval">
+                        <option value="1">1 Min</option>
+                        <option value="3">3 Mins</option>
+                        <option value="5" selected>5 Mins</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Max Trades (Side)</label>
+                    <select id="maxTradesInput">
+                        <option value="1">1 Trade</option>
+                        <option value="2" selected>2 Trades</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Mode</label>
+                    <select id="modeInput" style="border: 1px solid #f9a825; color: #f9a825;">
+                        <option value="true">📄 PAPER</option>
+                        <option value="false">💰 REAL MONEY</option>
+                    </select>
+                </div>
             </div>
 
             <button onclick="updateConfig()" class="btn btn-update">💾 UPDATE SETTINGS</button>
-            <div id="configMsg" style="margin-top:10px; font-size:0.9rem; text-align:center;"></div>
+            <div id="configMsg" style="margin-top:5px; font-size:0.8rem; text-align:center;"></div>
+
+            <div style="margin-top: 15px; padding: 10px; background: #2a2a2a; border-radius: 6px;">
+                <div style="display: flex; gap: 5px;">
+                    <button onclick="switchToLive()" id="liveBtn" style="background:#00c853; color:white; border:none; padding:6px; border-radius:4px; flex:1; font-size:0.8rem;">LIVE</button>
+                    <button onclick="switchToDemo()" id="demoBtn" style="background:#666; color:white; border:none; padding:6px; border-radius:4px; flex:1; font-size:0.8rem;">DEMO</button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <button onclick="moveDemoPrices()" style="background:#ff9800; color:white; border:none; padding:8px; border-radius:4px; width:100%; font-size:0.8rem;">🔄 MOVE DEMO PRICES</button>
+            </div>
         </div>
 
-        <div class="card">
-            <h2>📡 Active Trades & Signals</h2>
+        <div class="card monitor-panel">
+            <h2>📡 Live Trade Monitor</h2>
             <table>
                 <thead>
                     <tr>
                         <th>TYPE</th>
-                        <th>STRIKE</th>
-                        <th>ENTRY PRICE</th>
-                        <th>CURRENT SL</th>
-                        <th>STATUS</th>
+                        <th>QTY</th> <th>STRIKE</th>
+                        <th>ENTRY</th>
+                        <th>LTP</th>
+                        <th>SL</th>
+                        <th>P&L</th>
+                        <th>ACT</th>  
                     </tr>
                 </thead>
                 <tbody id="tradeTable">
-                    <tr><td colspan="5" style="text-align:center; color:#555;">Waiting for data...</td></tr>
+                    <tr><td colspan="8" style="text-align:center; color:#555;">Waiting for data...</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <div class="card log-panel log-column">
+            <h2>📜 System Activity</h2>
+            <div id="logBox">
+                <div class="log-entry"><span class="log-time">--:--</span> Waiting for logs...</div>
+            </div>
         </div>
     </div>
 
     <script>
-        // === THE WAITER LOGIC ===
-        
-        // 1. Poll Status every 1 second
         setInterval(fetchStatus, 1000);
+        setInterval(fetchLogs, 2000); // Poll logs every 2 seconds
 
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/strategy/status');
                 const data = await res.json();
                 
-                // Update Badge
                 const badge = document.getElementById('statusBadge');
                 if (data.running) {
                     badge.innerText = "RUNNING (" + data.state + ")";
@@ -125,62 +222,143 @@
                     badge.className = "status-indicator status-stopped";
                 }
 
-                // Update Table
                 const tbody = document.getElementById('tradeTable');
-                tbody.innerHTML = ""; // Clear old rows
-                
+                tbody.innerHTML = ""; 
                 const allTrades = [...data.ce_trades, ...data.pe_trades];
                 
                 if (allTrades.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#555; padding:20px;">No Active Trades. Scanning Market...</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#555; padding:20px;">No Active Trades. Scanning...</td></tr>`;
                 } else {
                     allTrades.forEach(t => {
-                        const row = `
-                            <tr>
+                        const pnlClass = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+                        tbody.innerHTML += `<tr>
                                 <td><span class="tag ${t.type === 'CE' ? 'tag-ce' : 'tag-pe'}">${t.type}</span></td>
-                                <td style="font-weight:bold;">${t.strike}</td>
+                                <td style="font-weight:bold; color:#ddd;">${t.quantity || '-'}</td> <td style="font-weight:bold;">${t.strike}</td>
                                 <td>${t.entry}</td>
+                                <td class="ltp-val">${t.ltp}</td>
                                 <td style="color: #f9a825;">${t.sl}</td>
-                                <td>Shield Active 🛡️</td>
-                            </tr>
-                        `;
-                        tbody.innerHTML += row;
+                                <td class="${pnlClass}">${t.pnl}</td>
+                                <td><button onclick="exitSingleTrade('${t.type}_${t.strike}_${t.entry_time}')" style="cursor:pointer; background:none; border:none;">❌</button></td>
+                                </tr>`;
                     });
                 }
+            } catch (err) { console.error("Connection lost:", err); }
+        }
 
-            } catch (err) {
-                console.error("Connection lost:", err);
-            }
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const data = await res.json();
+                if(data.logs && data.logs.length > 0) {
+                    const logBox = document.getElementById('logBox');
+                    logBox.innerHTML = data.logs.map(l => 
+                        `<div class="log-entry"><span class="log-time">[${l.time}]</span> ${l.msg}</div>`
+                    ).join('');
+                    // Auto scroll to bottom
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+            } catch(e) { }
         }
 
         async function sendSignal(action) {
-            // action = 'start' or 'stop'
             const res = await fetch(`/api/strategy/${action}`, { method: 'POST' });
             const data = await res.json();
             alert(data.message);
         }
 
         async function updateConfig() {
-            const sl = document.getElementById('slInput').value;
-            const max = document.getElementById('maxTradesInput').value;
-            const paper = document.getElementById('modeInput').value === "true";
-
             const payload = {
-                sl_percentage: sl,
-                max_trades: max,
-                paper_mode: paper
+                sl_percentage: document.getElementById('slInput').value,
+                max_trades: document.getElementById('maxTradesInput').value,
+                paper_mode: document.getElementById('modeInput').value === "true",
+                start_time: document.getElementById('startTime').value,
+                end_time: document.getElementById('noEntryTime').value,
+                exit_time: document.getElementById('exitTime').value,
+                min_buffer: document.getElementById('minBuffer').value,
+                max_buffer: document.getElementById('maxBuffer').value,
+                sl_interval: document.getElementById('slInterval').value,
+                lots_multiplier: document.getElementById('lotInput').value, // NEW INPUT
+                use_demo_data: (currentMode === "DEMO")
             };
-
             const res = await fetch('/api/strategy/update-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
             const data = await res.json();
             const msg = document.getElementById('configMsg');
             msg.innerText = "✅ " + data.message;
             setTimeout(() => msg.innerText = "", 3000);
+        }
+
+        async function exitSingleTrade(tradeId) {
+            if (!confirm(`⚠️ Are you sure you want to exit trade ${tradeId}?`)) return;
+            try {
+                const response = await fetch(`/api/trades/${tradeId}/exit`, { method: 'POST' });
+                const result = await response.json();
+                if (result.success) { alert(`✅ Trade Exited!`); fetchStatus(); } 
+                else { alert(`❌ Failed: ${result.message}`); }
+            } catch (error) { alert(`❌ Error: ${error}`); }
+        }
+
+        let currentMode = "LIVE";
+        // --- CORRECTED SWITCH FUNCTIONS (Connects to Backend) ---
+
+        async function switchToLive() {
+            currentMode = "LIVE";
+            document.getElementById('liveBtn').style.background = '#00c853';
+            document.getElementById('demoBtn').style.background = '#666';
+            
+            // 1. Force the backend to update settings immediately
+            await updateConfig();
+            
+            // 2. Alert you so you know it happened
+            alert('✅ Switched to LIVE MARKET data');
+        }
+
+        async function switchToDemo() {
+            currentMode = "DEMO";
+            document.getElementById('demoBtn').style.background = '#ff9800';
+            document.getElementById('liveBtn').style.background = '#666';
+            
+            // 1. Force the backend to update settings immediately
+            await updateConfig();
+            
+            // 2. Alert you so you know it happened
+            alert('🎮 Switched to DEMO MODE - Backend Updated');
+        }
+        // ... (after switchToDemo function) ...
+
+        async function moveDemoPrices() {
+            // 1. Check Mode
+            if (currentMode !== "DEMO") {
+                alert('⚠️ Switch to DEMO MODE first!');
+                return;
+            }
+
+            // 2. Find the button and change text (VISUAL FEEDBACK)
+            // We search for the button that calls this function
+            const btn = document.querySelector('button[onclick="moveDemoPrices()"]');
+            const originalText = btn.innerText;
+            
+            btn.innerText = "⏳ MOVING...";
+            btn.style.opacity = "0.6"; // Dim the button
+
+            try {
+                // 3. Call the API
+                const response = await fetch('/api/demo/move-prices', { method: 'POST' });
+                const result = await response.json();
+                
+                // 4. Log success (No popup needed, the text change is enough)
+                console.log("Prices Moved:", result);
+
+            } catch (error) {
+                alert('❌ Error: ' + error);
+            } finally {
+                // 5. Reset Button Text (So you know it finished)
+                btn.innerText = originalText;
+                btn.style.opacity = "1";
+            }
         }
     </script>
 </body>
