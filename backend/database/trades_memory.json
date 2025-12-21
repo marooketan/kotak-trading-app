@@ -758,9 +758,240 @@
       "quantity": 25,
       "stoploss": 110.0,
       "atp_at_entry": 100.0
+    },
+    {
+      "trade_id": "PE_21800_1766308044",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 82.27,
+      "entry_time": "2025-12-21 14:37:24",
+      "quantity": 75,
+      "stoploss": 91.38,
+      "atp_at_entry": 83.07
+    },
+    {
+      "trade_id": "CE_22200_1766308075",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22200,
+      "entry_price": 80.83,
+      "entry_time": "2025-12-21 14:37:55",
+      "quantity": 75,
+      "stoploss": 90.19,
+      "atp_at_entry": 81.99
+    },
+    {
+      "trade_id": "PE_21900_1766308136",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21900,
+      "entry_price": 80.65,
+      "entry_time": "2025-12-21 14:38:56",
+      "quantity": 75,
+      "stoploss": 90.41,
+      "atp_at_entry": 82.19
+    },
+    {
+      "trade_id": "CE_21800_1766308168",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 21800,
+      "entry_price": 88.17,
+      "entry_time": "2025-12-21 14:39:28",
+      "quantity": 75,
+      "stoploss": 97.86,
+      "atp_at_entry": 88.96
+    },
+    {
+      "trade_id": "CE_22200_1766309271",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22200,
+      "entry_price": 80.41,
+      "entry_time": "2025-12-21 14:57:51",
+      "quantity": 75,
+      "stoploss": 90.47,
+      "atp_at_entry": 82.25
+    },
+    {
+      "trade_id": "PE_22100_1766309271",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 22100,
+      "entry_price": 90.01,
+      "entry_time": "2025-12-21 14:57:51",
+      "quantity": 75,
+      "stoploss": 100.73,
+      "atp_at_entry": 91.57
+    },
+    {
+      "trade_id": "CE_21900_1766309334",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 21900,
+      "entry_price": 86.6,
+      "entry_time": "2025-12-21 14:58:54",
+      "quantity": 75,
+      "stoploss": 96.97,
+      "atp_at_entry": 88.15
+    },
+    {
+      "trade_id": "PE_21800_1766309334",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 94.52,
+      "entry_time": "2025-12-21 14:58:54",
+      "quantity": 75,
+      "stoploss": 105.15,
+      "atp_at_entry": 95.59
+    },
+    {
+      "trade_id": "PE_21800_1766311201",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 88.3,
+      "entry_time": "2025-12-21 15:30:01",
+      "quantity": 75,
+      "stoploss": 99.32,
+      "atp_at_entry": 90.29
+    },
+    {
+      "trade_id": "CE_22100_1766311232",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 80.61,
+      "entry_time": "2025-12-21 15:30:32",
+      "quantity": 75,
+      "stoploss": 89.38,
+      "atp_at_entry": 81.25
+    },
+    {
+      "trade_id": "CE_22100_1766312465",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 89.11,
+      "entry_time": "2025-12-21 15:51:05",
+      "quantity": 75,
+      "stoploss": 99.24,
+      "atp_at_entry": 90.22
+    },
+    {
+      "trade_id": "PE_21800_1766313041",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 82.43,
+      "entry_time": "2025-12-21 16:00:41",
+      "quantity": 75,
+      "stoploss": 91.87,
+      "atp_at_entry": 83.52
+    },
+    {
+      "trade_id": "CE_22100_1766313103",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 87.36,
+      "entry_time": "2025-12-21 16:01:43",
+      "quantity": 75,
+      "stoploss": 97.78,
+      "atp_at_entry": 88.89
+    },
+    {
+      "trade_id": "PE_21800_1766313303",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 92.33,
+      "entry_time": "2025-12-21 16:05:03",
+      "quantity": 75,
+      "stoploss": 103.07,
+      "atp_at_entry": 93.7
+    },
+    {
+      "trade_id": "CE_22100_1766313334",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 83.77,
+      "entry_time": "2025-12-21 16:05:34",
+      "quantity": 75,
+      "stoploss": 94.27,
+      "atp_at_entry": 85.7
+    },
+    {
+      "trade_id": "PE_21800_1766313932",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 93.07,
+      "entry_time": "2025-12-21 16:15:32",
+      "quantity": 75,
+      "stoploss": 103.87,
+      "atp_at_entry": 94.43
+    },
+    {
+      "trade_id": "CE_22100_1766314083",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 86.91,
+      "entry_time": "2025-12-21 16:18:03",
+      "quantity": 75,
+      "stoploss": 96.6,
+      "atp_at_entry": 87.82
+    },
+    {
+      "trade_id": "CE_22100_1766315410",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 94.98,
+      "entry_time": "2025-12-21 16:40:10",
+      "quantity": 75,
+      "stoploss": 106.44,
+      "atp_at_entry": 96.76
+    },
+    {
+      "trade_id": "CE_22100_1766315829",
+      "symbol": null,
+      "option_type": "CE",
+      "strike": 22100,
+      "entry_price": 86.96,
+      "entry_time": "2025-12-21 16:47:09",
+      "quantity": 75,
+      "stoploss": 96.95,
+      "atp_at_entry": 88.14
+    },
+    {
+      "trade_id": "PE_21800_1766318141",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 83.33,
+      "entry_time": "2025-12-21 17:25:41",
+      "quantity": 75,
+      "stoploss": 93.78,
+      "atp_at_entry": 85.25
+    },
+    {
+      "trade_id": "PE_21800_1766319833",
+      "symbol": null,
+      "option_type": "PE",
+      "strike": 21800,
+      "entry_price": 94.89,
+      "entry_time": "2025-12-21 17:53:53",
+      "quantity": 75,
+      "stoploss": 105.84,
+      "atp_at_entry": 96.22
     }
   ],
   "trade_history": [],
   "strategy_settings": {},
-  "last_saved": "2025-12-21 12:51:54.967597"
+  "last_saved": "2025-12-21 19:38:09.199607"
 }

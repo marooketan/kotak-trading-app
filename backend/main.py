@@ -15,6 +15,9 @@ import threading
 from strategy.engine import StrategyEngine
 import strategy.strategy_config as config
 import random
+import strategy.strategy_config as config
+config.load_config()
+
 import urllib.parse
 import time
 import uuid
@@ -1525,7 +1528,7 @@ async def update_config(request: Request):
     print(f"   ➤ Time: {config.START_TIME} to {config.NO_NEW_ENTRY_TIME} (Exit: {config.SQUARE_OFF_TIME})")
     print(f"   ➤ Risk: SL {config.SL_PERCENTAGE*100}% | Buffers: {config.MIN_BUFFER_PERCENTAGE*100}% - {config.MAX_BUFFER_PERCENTAGE*100}%")
     print("-" * 40)
-
+    config.save_config()
     return {"success": True, "message": "Config Updated"}# --- CRITICAL FIX: Removed 'async' here ---
 @app.get("/api/order-book")
 def order_book_api():
@@ -1692,8 +1695,47 @@ def move_demo_prices():
         "highest_pe": highest_pe["strike"],
         "message": "Prices moved!"
     }
+@app.get("/api/strategy/config")
+def get_strategy_config():
+    return {
+        "success": True,
+        "config": {
+            "start_time": config.START_TIME,
+            "no_new_entry_time": config.NO_NEW_ENTRY_TIME,
+            "square_off_time": config.SQUARE_OFF_TIME,
+            "min_buffer": config.MIN_BUFFER_PERCENTAGE * 100,
+            "max_buffer": config.MAX_BUFFER_PERCENTAGE * 100,
+            "sl_percentage": config.SL_PERCENTAGE,
+            "sl_interval": config.SL_UPDATE_INTERVAL // 60,
+            "max_trades": config.MAX_OPEN_POSITIONS,
+            "lots_multiplier": config.LOTS_MULTIPLIER,
+            "paper_trading": config.PAPER_TRADING,
+            "use_demo_data": config.USE_DEMO_DATA
+        }
+    }
+@app.get("/api/exited_trades")
+def get_exited_trades():
+    exited_list = []
+    total_pnl = 0
 
+    if hasattr(bot_engine, 'exited_trades') and bot_engine.exited_trades:
+        for trade in bot_engine.exited_trades:
+            exited_list.append({
+                "type": trade.type,
+                "strike": trade.strike,
+                "entry_price": trade.entry_price,
+                "exit_price": trade.current_ltp,
+                "pnl": trade.pnl,
+                "quantity": trade.quantity,
+                "entry_time": datetime.fromtimestamp(trade.entry_time).strftime("%H:%M:%S"),  # <-- FIXED
+                "exit_time": datetime.now().strftime("%H:%M:%S")
+            })
+            total_pnl += trade.pnl
 
+    return {
+        "exited_trades": exited_list,
+        "total_pnl": round(total_pnl, 2)
+    }
 if os.path.exists(frontend_path): app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 if __name__ == "__main__":
     import uvicorn

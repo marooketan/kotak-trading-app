@@ -14,7 +14,7 @@ SQUARE_OFF_TIME = "15:15"
 
 # 3. Loop Speeds (Seconds)
 OI_CHECK_INTERVAL = 60
-PRICE_CHECK_INTERVAL = 30
+PRICE_CHECK_INTERVAL = 10
 # Stoploss Update: Default 5 minutes (300 sec)
 SL_UPDATE_INTERVAL = 300 
 
@@ -36,3 +36,62 @@ MAX_OPEN_POSITIONS = 2
 COOLDOWN_SECONDS = 900
 PAPER_TRADING = True
 USE_DEMO_DATA = True  # Set to True for demo mode
+import json, os
+
+CONFIG_FILE = "last_strategy_config.json"
+
+def save_config():
+    data = {
+        # ONLY UI VALUES
+        "START_TIME": START_TIME,
+        "NO_NEW_ENTRY_TIME": NO_NEW_ENTRY_TIME,
+        "SQUARE_OFF_TIME": SQUARE_OFF_TIME,
+
+        "MIN_BUFFER_PERCENTAGE": MIN_BUFFER_PERCENTAGE,
+        "MAX_BUFFER_PERCENTAGE": MAX_BUFFER_PERCENTAGE,
+
+        "SL_PERCENTAGE": SL_PERCENTAGE,
+        "SL_UPDATE_INTERVAL": SL_UPDATE_INTERVAL,
+
+        "MAX_OPEN_POSITIONS": MAX_OPEN_POSITIONS,
+        "LOTS_MULTIPLIER": LOTS_MULTIPLIER,
+
+        "PAPER_TRADING": PAPER_TRADING,
+        "USE_DEMO_DATA": USE_DEMO_DATA,
+    }
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+def load_config():
+    global START_TIME, NO_NEW_ENTRY_TIME, SQUARE_OFF_TIME
+    global MIN_BUFFER_PERCENTAGE, MAX_BUFFER_PERCENTAGE
+    global SL_PERCENTAGE, SL_UPDATE_INTERVAL
+    global MAX_OPEN_POSITIONS, LOTS_MULTIPLIER
+    global PAPER_TRADING, USE_DEMO_DATA
+
+    if not os.path.exists(CONFIG_FILE):
+        return
+
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            data = json.load(f)
+
+        # ONLY UI-CONTROLLED VALUES
+        START_TIME = data.get("START_TIME", START_TIME)
+        NO_NEW_ENTRY_TIME = data.get("NO_NEW_ENTRY_TIME", NO_NEW_ENTRY_TIME)
+        SQUARE_OFF_TIME = data.get("SQUARE_OFF_TIME", SQUARE_OFF_TIME)
+
+        MIN_BUFFER_PERCENTAGE = data.get("MIN_BUFFER_PERCENTAGE", MIN_BUFFER_PERCENTAGE)
+        MAX_BUFFER_PERCENTAGE = data.get("MAX_BUFFER_PERCENTAGE", MAX_BUFFER_PERCENTAGE)
+
+        SL_PERCENTAGE = data.get("SL_PERCENTAGE", SL_PERCENTAGE)
+        SL_UPDATE_INTERVAL = data.get("SL_UPDATE_INTERVAL", SL_UPDATE_INTERVAL)
+
+        MAX_OPEN_POSITIONS = data.get("MAX_OPEN_POSITIONS", MAX_OPEN_POSITIONS)
+        LOTS_MULTIPLIER = data.get("LOTS_MULTIPLIER", LOTS_MULTIPLIER)
+
+        PAPER_TRADING = data.get("PAPER_TRADING", PAPER_TRADING)
+        USE_DEMO_DATA = data.get("USE_DEMO_DATA", USE_DEMO_DATA)
+
+    except Exception as e:
+        print("⚠️ Config load failed, using defaults:", e)

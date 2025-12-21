@@ -6,6 +6,9 @@ import strategy.strategy_config as config
 from strategy.state import StrategyState
 from database.memory_helper import TradeMemory
 from strategy.oi_tracker import OITracker
+from strategy.demo_data import DemoMarket
+demo = DemoMarket()
+
 
 # === THE TRADE FILE FOLDER ===
 class Trade:
@@ -32,6 +35,7 @@ class StrategyEngine:
         
         self.active_ce_trades = []
         self.active_pe_trades = []
+        self.exited_trades = []  # Stores all closed trades
         self.cooldown_list = {}
         self.last_sl_update_time = time.time()
         self.memory = TradeMemory()
@@ -63,6 +67,7 @@ class StrategyEngine:
         self.log_message("🧹 CLEARING BRAIN MEMORY...")
         self.active_ce_trades = []
         self.active_pe_trades = []
+        self.exited_trades = []  # Clear exited trades on reset
         self.cooldown_list = {}
         self.tracker = OITracker()
         return True
@@ -191,11 +196,16 @@ class StrategyEngine:
         all_trades = self.active_ce_trades + self.active_pe_trades
         if not all_trades: return
 
-        expiries = self.api.get_expiries("NIFTY", "NFO")
-        if not expiries: return
-        data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
-        if not data or not data.get("success"): return
-        chain = data.get("data", [])
+        # === DATA SOURCE (DEMO vs LIVE) ===
+        if config.USE_DEMO_DATA:
+            chain = demo.get_chain()
+        else:
+            expiries = self.api.get_expiries("NIFTY", "NFO")
+            if not expiries: return
+            data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
+            if not data or not data.get("success"): return
+            chain = data.get("data", [])
+
 
         for trade in all_trades:
             row = self.get_data_for_strike(chain, trade.strike)
@@ -209,7 +219,7 @@ class StrategyEngine:
             
             symbol = row.get("pTrdSymbol")
             trade.current_ltp = ltp
-            trade.pnl = round(trade.entry_price - ltp, 2)
+            trade.pnl = round((trade.entry_price - ltp) * trade.quantity, 2)
             
             # SL CHECK
             if ltp > trade.sl_price:
@@ -229,6 +239,8 @@ class StrategyEngine:
                         self.modify_broker_sl(trade.sl_order_id, potential_new_sl, symbol)
 
     def close_trade(self, trade, reason, current_time):
+        # Save exited trade to memory
+        self.exited_trades.append(trade)
         self.log_message(f"❌ CLOSING TRADE: {trade.type} {trade.strike} [{reason}]")
         self.exit_broker_trade(trade)
         if trade.type == "CE": self.active_ce_trades.remove(trade)
@@ -246,13 +258,16 @@ class StrategyEngine:
         
         # DEMO MODE
         try:
-            demo_response = self.api.get_demo_chain()
-            if config.USE_DEMO_DATA and demo_response and demo_response.get("success"):
+            if config.USE_DEMO_DATA:
                 self.log_message("🎮 USING DEMO DATA")
-                chain = demo_response.get("data", [])
-                spot = demo_response.get("spot", 0)
-                best_ce = demo_response.get("highest_ce", 22000)
-                best_pe = demo_response.get("highest_pe", 22000)
+                chain = demo.get_chain()   # 👈 use your DemoMarket class
+                demo.increment_entry()
+                self.log_message(f"🎮 DEMO entry_count = {demo.entry_count}")
+
+                spot = demo.spot
+
+                best_ce = 22100   # or pick from demo.spot + 100
+                best_pe = 21800   # or pick from demo.spot - 100
         
                 # 1. Show the "Missing" Prices
                 self.log_message(f"📈 DEMO Spot: {spot}")
@@ -280,6 +295,8 @@ class StrategyEngine:
         
         # REAL MARKET (Keep Stability Check Here for Safety!)
         expiries = self.api.get_expiries("NIFTY", "NFO")
+        chain = demo.get_chain()
+
         if not expiries: return
         data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
         if not data or not data.get("success"): return
@@ -316,6 +333,7 @@ class StrategyEngine:
         try:
             ltp = float(row[key].get('ltp', 0))
             atp = float(row[key].get('atp', 0))
+            oi = float(row[key].get('oi', 0))
         except ValueError: return
         symbol = row.get("pTrdSymbol")
         
@@ -324,7 +342,10 @@ class StrategyEngine:
         min_allowed_price = atp - (atp * config.MAX_BUFFER_PERCENTAGE)
         
         # CHANGED: Log the check details
-        self.log_message(f"   ➤ {type} {strike} Check: LTP {ltp} vs Buffer {min_allowed_price:.1f}-{max_allowed_price:.1f}")
+        self.log_message(
+    f" ➤ {type} {strike} Check: LTP {ltp} vs Buffer {min_allowed_price:.1f}-{max_allowed_price:.1f} | ATP {atp} | OI {oi}"
+)
+
         
         if ltp < max_allowed_price and ltp > min_allowed_price:
             self.log_message(f"🚀 EXECUTION SIGNAL: {type} {strike} @ {ltp}")
