@@ -13,7 +13,7 @@
             width: 98%; 
             margin: 0 auto; 
             display: grid; 
-            grid-template-columns: 320px 1fr 350px; /* Left, Middle, Right */
+            grid-template-columns: 320px 1fr 550px; /* Left, Middle, Right */
             gap: 15px; 
             height: 95vh;
         }
@@ -68,7 +68,13 @@
             border-radius: 4px;
             padding: 10px;
             font-family: 'Consolas', monospace;
-            font-size: 0.85rem;
+            #logBox {
+            font-size: 1.9rem;    /* Bigger text */
+            line-height: 1.4;     /* More line spacing */
+            padding: 12px 15px;   /* More padding */
+        }
+
+
             color: #0f0;
             overflow-y: auto;
             white-space: pre-wrap;
@@ -160,27 +166,20 @@
             </div>
 
             <div style="color: #00c853; font-weight: bold; margin-bottom: 5px; margin-top: 10px; font-size: 0.8rem;">🛡️ RISK MANAGEMENT</div>
-            <div class="grid-2">
+                        <div class="grid-2">
                 <div class="input-group">
                     <label>Stoploss (ATP+%)</label>
                     <input type="number" id="slInput" step="0.01" value="0.10">
                 </div>
                 <div class="input-group">
                     <label>Update SL (Min)</label>
-                    <select id="slInterval">
-                        <option value="1">1 Min</option>
-                        <option value="3">3 Mins</option>
-                        <option value="5" selected>5 Mins</option>
-                    </select>
+                    <input type="number" id="slInterval" min="1" max="60" value="5" style="width: 80px;">
                 </div>
             </div>
             <div class="grid-2">
                 <div class="input-group">
                     <label>Max Trades (Side)</label>
-                    <select id="maxTradesInput">
-                        <option value="1">1 Trade</option>
-                        <option value="2" selected>2 Trades</option>
-                    </select>
+                    <input type="number" id="maxTradesInput" min="1" max="10" value="2" style="width: 80px;">
                 </div>
                 <div class="input-group">
                     <label>Mode</label>
@@ -273,6 +272,8 @@
 
         // Combine active and exited trades
         const tbody = document.getElementById('tradeTable');
+        
+
         tbody.innerHTML = "";
 
         // 1. First show ACTIVE trades (your existing code)
@@ -325,10 +326,6 @@
         console.error("Connection lost:", err);
     }
     // Calculate and display live P&L
-const livePnL = calculateLivePnL([...data.ce_trades, ...data.pe_trades]);
-const livePnLElement = document.getElementById('livePnL');
-livePnLElement.textContent = `₹${livePnL}`;
-livePnLElement.style.color = livePnL >= 0 ? '#00c853' : '#d50000';
 }
 
     async function fetchLogs() {
@@ -361,6 +358,10 @@ livePnLElement.style.color = livePnL >= 0 ? '#00c853' : '#d50000';
         const liveData = await liveRes.json();
         const liveTrades = [...liveData.ce_trades, ...liveData.pe_trades];
         const livePnL = liveTrades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+        // Update Live P&L display (NEW)
+        document.getElementById('livePnL').textContent = `₹${livePnL}`;
+        document.getElementById('livePnL').style.color = livePnL >= 0 ? '#00c853' : '#d50000';
+
 
         // 3. Calculate total P&L
         const totalPnL = exitedPnL + livePnL;
@@ -402,7 +403,7 @@ livePnLElement.style.color = livePnL >= 0 ? '#00c853' : '#d50000';
 
     use_demo_data: (currentMode === "DEMO")
 };
-
+            console.log("Sending config:", payload);
             const res = await fetch('/api/strategy/update-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -480,7 +481,6 @@ async function moveDemoPrices() {
 
 // Initialize
 //fetchExitedTrades();
-setInterval(fetchExitedTrades, 2000);
 
 // ===== LOAD CONFIG ON PAGE LOAD =====
 async function loadConfigFromBackend() {
