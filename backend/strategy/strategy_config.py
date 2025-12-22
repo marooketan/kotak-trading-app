@@ -14,7 +14,7 @@ SQUARE_OFF_TIME = "15:15"
 
 # 3. Loop Speeds (Seconds)
 OI_CHECK_INTERVAL = 60
-PRICE_CHECK_INTERVAL = 10
+PRICE_CHECK_INTERVAL = 60
 # Stoploss Update: Default 5 minutes (300 sec)
 SL_UPDATE_INTERVAL = 300 
 
@@ -33,7 +33,7 @@ SL_PERCENTAGE = 0.10
 LOTS_MULTIPLIER = 1
 # 6. Portfolio Limits
 MAX_OPEN_POSITIONS = 2
-COOLDOWN_SECONDS = 900
+COOLDOWN_SECONDS = 600
 PAPER_TRADING = True
 USE_DEMO_DATA = True  # Set to True for demo mode
 import json, os

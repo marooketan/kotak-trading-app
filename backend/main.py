@@ -1462,7 +1462,8 @@ def exit_single_trade(trade_id: str):
                     bot_engine.active_ce_trades.remove(trade)
                 else:
                     bot_engine.active_pe_trades.remove(trade)
-                
+                bot_engine.exited_trades.append(trade)
+ 
                 # Remove from memory
                 bot_engine.memory.remove_trade(trade_id)
                 
