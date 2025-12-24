@@ -47,7 +47,8 @@ class KotakNiftyAPI:
         self.bfo_master_df = None  # Brain 2: BSE
         
         self.lot_cache = {} 
-        
+        self.call_count = 0
+        self.api_session = requests.Session()
         # === NEW: Create "Fast" Persistent Connection ===
         self.api_session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
@@ -451,6 +452,7 @@ class KotakNiftyAPI:
         return self.get_option_chain("NIFTY", expiry, strike_count)
 
     def get_option_chain(self, index: str, expiry: str, strikes: str = "10", recenter: bool = True):
+        self.call_count += 1
         # 1. Determine Segment
         segment = "BFO" if index in ["SENSEX", "BANKEX", "SENSEX50"] else "NFO"
         
@@ -1077,13 +1079,12 @@ class KotakNiftyAPI:
         cancel_res = self.cancel_order(order_number)
         if not cancel_res.get("success"): return cancel_res
         return {"success": False, "message": "Expiry change requires full symbol map"}
-
     def place_order(self, trading_symbol, transaction_type, quantity, product_code="NRML", price="0", order_type="MKT", validity="DAY", am_flag="NO", segment="NFO", trigger_price=None):
         from datetime import datetime
         current_time = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         
         # DEBUG 1
-        logger.info(f"[{current_time}] 🎯 place_order: Symbol={trading_symbol}, Action={transaction_type}, Qty={quantity}, Segment={segment}")
+        logger.info(f"[{current_time}] 🎯 place_order: Symbol={trading_symbol}, Action={transaction_type}, Qty={quantity}, Segment={segment}, Trig={trigger_price}")
         
         if not self.current_user: 
             logger.info(f"[{current_time}] ❌ ABORTED: Not logged in")
@@ -1105,15 +1106,19 @@ class KotakNiftyAPI:
         url = f"{base_url}/quick/order/rule/ms/place"
         es_value = "bse_fo" if segment == "BFO" else "nse_fo"
 
+        # === FIX: Use actual trigger_price if provided, else "0" ===
+        tp_value = str(trigger_price) if trigger_price and float(trigger_price) > 0 else "0"
+
         order_payload = {
             "am": am_flag, "dq": "0", "es": es_value, "mp": "0", 
-            "pc": product_code, "pf": "N", "pr": price, "pt": order_type, 
-            "qt": str(quantity), "rt": validity, "tp": "0", 
-            "ts": trading_symbol, "tt": transaction_type  # 'B' or 'S'
+            "pc": product_code, "pf": "N", "pr": str(price), "pt": order_type, 
+            "qt": str(quantity), "rt": validity, 
+            "tp": tp_value, 
+            "ts": trading_symbol, "tt": transaction_type
         }
         
         # DEBUG 4
-        logger.info(f"[{current_time}] ✅ Payload: Action={transaction_type}, Qty={quantity}")
+        logger.info(f"[{current_time}] ✅ Payload: Action={transaction_type}, Qty={quantity}, Trig={tp_value}")
         
         data = f"jData={urllib.parse.quote_plus(json.dumps(order_payload, separators=(',', ':')))}"
         headers = {"Content-Type": "application/x-www-form-urlencoded", "accept": "application/json"}
@@ -1161,8 +1166,8 @@ class KotakNiftyAPI:
             logger.info(f"[{current_time}] 💥 Exception: {ex}")
             import traceback
             logger.info(f"[{current_time}] 💥 Traceback: {traceback.format_exc()}")
-            return {"success": False, "message": str(ex)}
-    
+            return {"success": False, "message": str(ex)} 
+       
        
     def cancel_order(self, order_number: str):
         if not self.current_user: 
@@ -1188,6 +1193,64 @@ class KotakNiftyAPI:
         
         except Exception as ex: 
             return {"success": False, "message": str(ex)}
+class SharedMarketData:
+    """Shared storage for ANY index bot trades"""
+    def __init__(self):
+        self.data = {}
+        self.lock = threading.Lock()
+    
+    def update_index_data(self, index_name, chain, spot):  # ← LINE 1256
+        """Save data for any index (NIFTY, SENSEX, etc.)"""
+        with self.lock:
+            # Initialize if not exists
+            if index_name not in self.data:
+                self.data[index_name] = {}
+            
+            # Save the data
+            self.data[index_name]["chain"] = chain
+            self.data[index_name]["spot"] = spot
+            self.data[index_name]["timestamp"] = time.time()
+            
+            # Find highest OI strikes (if chain exists)
+            if chain:
+                def get_oi_int(x, side):
+                    oi_str = x.get(side, {}).get("oi", "0")
+                    try:
+                        return float(oi_str)
+                    except:
+                        return 0
+                
+                try:
+                    highest_ce = max(chain, key=lambda x: get_oi_int(x, "call"))
+                    highest_pe = max(chain, key=lambda x: get_oi_int(x, "put"))
+                    self.data[index_name]["highest_ce"] = highest_ce.get("strike", 0)
+                    self.data[index_name]["highest_pe"] = highest_pe.get("strike", 0)
+                except:
+                    self.data[index_name]["highest_ce"] = 0
+                    self.data[index_name]["highest_pe"] = 0
+    
+    def get_index_data(self, index_name):  # ← This should be at SAME level as update_index_data
+        """Get data for specific index"""
+        with self.lock:
+            if index_name in self.data:
+                return self.data[index_name].copy()
+            return None
+    
+    def get_all_bot_indices_data(self):  # ← This should be at SAME level too
+        """Get ALL indices that bot trades"""
+        import strategy.strategy_config as config
+        bot_indices = getattr(config, "BOT_TRADED_INDICES", ["NIFTY"])
+        
+        result = {}
+        for idx in bot_indices:
+            if idx in self.data:
+                result[idx] = self.data[idx].copy()
+        
+        return result
+
+# Create ONE shared storage for everyone
+shared_market = SharedMarketData()
+
 # ======================================================
 # 1. INITIALIZE API & ENGINE (MUST BE FIRST)
 # ======================================================
@@ -1376,26 +1439,47 @@ def expiries_v2_api(index: str = Query("NIFTY"), segment: str = Query("NFO")):
     
     return {"success": True, "expiries": kotak_api.get_expiries(safe_index, safe_segment)}
 # === UPDATED: OPTION CHAIN ENDPOINT (Handles NIFTY & BANKNIFTY) ===
+# === UPDATED: OPTION CHAIN ENDPOINT ===
 @app.get("/api/option-chain")
 def chain_api(expiry: str, strikes: str = "10", index: str = "NIFTY", segment: str = "NFO", market: str = None):
-    """
-    Now accepts both NFO and BFO segments.
-    Supports both 'segment' and 'market' parameters for backward compatibility.
-    """
     # Clean the input
     safe_index = index.upper().strip()
     
-    # Use market if provided, otherwise segment (for backward compatibility)
+    # Use market if provided, otherwise segment
     if market:
         safe_segment = market.upper().strip()
     else:
         safe_segment = segment.upper().strip()
     
-    # Validate segment
     if safe_segment not in ["NFO", "BFO"]:
         safe_segment = "NFO"
     
-    return kotak_api.get_option_chain(safe_index, expiry, strikes)
+    # Get data from Kotak API
+    result = kotak_api.get_option_chain(safe_index, expiry, strikes)
+    
+    # 🔥 CRITICAL FIX: Save data EVERY TIME, but print log rarely
+    if result.get("success"):
+        try:
+            import strategy.strategy_config as config
+            bot_indices = getattr(config, "BOT_TRADED_INDICES", ["NIFTY"])
+            
+            # 1. ALWAYS SAVE THE DATA (100% of the time)
+            shared_market.update_index_data(
+                index_name=safe_index,
+                chain=result.get("data", []),
+                spot=result.get("spot", 0)
+            )
+
+            # 2. LOG IT RARELY (1% of the time)
+            if random.random() < 0.01:  
+                print(f"🔄 SHARED SAVE: Saving {safe_index} data for bot")
+                
+        except Exception as e:
+            print(f"⚠️ Error saving {safe_index} data: {e}")
+    
+    return result
+
+
 @app.get("/api/portfolio")
 def portfolio_api():
     return kotak_api.get_positions()
@@ -1626,21 +1710,27 @@ async def place_order_api(request: Request):
         data.get("price", "0"),
         data.get("order_type", "MKT"),
         segment=segment,
+        trigger_price=data.get("trigger_price")  # <--- NEW ARGUMENT ADDED
     )
-
 # Keep this one ASYNC (Cancel Order)
 @app.post("/api/cancel-order")
 async def cancel_order_api(request: Request):
     data = await request.json()
     return kotak_api.cancel_order(data.get("order_number"))
 
-# Keep this one ASYNC (Modify Order) - Assuming you have this
+# Keep this one ASYNC (Modify Order)
 @app.post("/api/modify-order")
 async def modify_order_api(request: Request):
     data = await request.json()
-    return kotak_api.modify_order(data.get("order_number"), data.get("symbol"), data.get("new_price"), 
-                                  data.get("new_quantity"), data.get("new_order_type"), data.get("new_expiry"))
-
+    return kotak_api.modify_order(
+        data.get("order_number"), 
+        data.get("symbol"), 
+        data.get("new_price"), 
+        data.get("new_quantity"), 
+        data.get("new_order_type"), 
+        data.get("new_expiry"),
+        data.get("new_trigger_price") # <--- NEW ARGUMENT ADDED
+    )
 # === FAST LOT SIZE LOOKUP (FROM DICT CACHE) ===
 @app.get("/api/lot-size")
 def lot_size(symbol: str = Query(...), segment: str = Query("NFO")):
@@ -1696,6 +1786,39 @@ def move_demo_prices():
         "highest_pe": highest_pe["strike"],
         "message": "Prices moved!"
     }
+
+# ======================================================
+# NEW API: BOT GETS MARKET DATA FOR ANY INDEX
+# ======================================================
+@app.get("/api/bot/market-data")
+def get_bot_market_data(index: str = "NIFTY"):
+    """Bot gets data for any index from shared storage"""
+    # Clean the index name
+    safe_index = index.upper().strip()
+    
+    # Get data from shared storage
+    data = shared_market.get_index_data(safe_index)
+    
+    if data is None:
+        return {
+            "success": False,
+            "message": f"No data found for {safe_index}. Dashboard may not be fetching this index."
+        }
+    
+    # Check freshness (less than 5 seconds old)
+    is_fresh = (time.time() - data.get("timestamp", 0)) < 5
+    
+    return {
+        "success": True,
+        "index": safe_index,
+        "data": data.get("chain", []),
+        "spot": data.get("spot", 0),
+        "highest_ce": data.get("highest_ce", 0),
+        "highest_pe": data.get("highest_pe", 0),
+        "timestamp": data.get("timestamp", 0),
+        "is_fresh": is_fresh,
+        "message": f"✅ Fresh {safe_index} data" if is_fresh else f"⚠️ {safe_index} data may be stale"
+    }
 @app.get("/api/strategy/config")
 def get_strategy_config():
     return {
@@ -1714,6 +1837,24 @@ def get_strategy_config():
             "use_demo_data": config.USE_DEMO_DATA
         }
     }
+
+# ======================================================
+# NEW API: DASHBOARD GETS BOT'S TRADING CONFIG
+# ======================================================
+@app.get("/api/bot/config/indices")
+def get_bot_trading_indices():
+    """Dashboard calls this to know which indices bot trades"""
+    import strategy.strategy_config as config
+    
+    # Get the list from config (default to ["NIFTY"] if not set)
+    indices = getattr(config, "BOT_TRADED_INDICES", ["NIFTY"])
+    
+    return {
+        "success": True,
+        "bot_traded_indices": indices,
+        "message": f"Bot trades {len(indices)} indices: {', '.join(indices)}"
+    }
+
 @app.get("/api/exited_trades")
 def get_exited_trades():
     exited_list = []

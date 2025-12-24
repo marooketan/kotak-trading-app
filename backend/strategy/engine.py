@@ -26,7 +26,7 @@ class Trade:
         self.current_ltp = entry_price 
         self.entry_order_id = order_id
         self.sl_order_id = sl_order_id
-        self.config_observer.schedule(event_handler, path='strategy', recursive=False)
+        
         self.quantity = 0 
 
 class ConfigHandler(FileSystemEventHandler):
@@ -327,91 +327,79 @@ class StrategyEngine:
         import strategy.strategy_config as config
         self.log_message(f"🔎 Scanning Market at {time.strftime('%H:%M:%S')}...")
         
-        # DEMO MODE
+        # REAL MARKET: Get data from SHARED MEMORY (not directly from API)
         try:
-            if config.USE_DEMO_DATA:
-                self.log_message("🎮 USING DEMO DATA")
-                chain = demo.get_chain()   # 👈 use your DemoMarket class
-                if not chain:
-                    self.log_message("⚠️ Demo chain is empty")
-                    return
-                
-                demo.increment_entry()
-                self.log_message(f"🎮 DEMO entry_count = {demo.entry_count}")
-
-                spot = demo.spot
-
-                best_ce = 22100   # or pick from demo.spot + 100
-                best_pe = 21800   # or pick from demo.spot - 100
-        
-                # 1. Show the "Missing" Prices
-                self.log_message(f"📈 DEMO Spot: {spot}")
-                self.log_message(f"📊 Highest OI -> CE: {best_ce} | PE: {best_pe}")
-        
-                # 2. DEMO SHORTCUT: Skip stability check so you see logs instantly!
-                if len(self.active_ce_trades) < config.MAX_OPEN_POSITIONS:
-                    if best_ce in self.cooldown_list and current_time < self.cooldown_list[best_ce]:
-                        self.log_message(f"   🧊 CE {best_ce} is in Cooldown.")
-                    else:
-                        # ALWAYS check entry in Demo (Ignore Stability)
-                        self.check_entry(chain, best_ce, "CE", current_time)
-        
-                if len(self.active_pe_trades) < config.MAX_OPEN_POSITIONS:
-                    if best_pe in self.cooldown_list and current_time < self.cooldown_list[best_pe]:
-                        self.log_message(f"   🧊 PE {best_pe} is in Cooldown.")
-                    else:
-                        # ALWAYS check entry in Demo (Ignore Stability)
-                        self.check_entry(chain, best_pe, "PE", current_time)
-        
-                return 
-        except Exception as e:
-            self.log_message(f"⚠️ Demo mode failed: {e}")
-            return  # Add return to prevent falling through to real market code
-        
-        # REAL MARKET (Keep Stability Check Here for Safety!)
-        expiries = self.api.get_expiries("NIFTY", "NFO")
-        if not expiries: 
-            return
-        
-        data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
-        if not data or not data.get("success"): 
-            return
-        
-        chain = data.get("data", [])
-        if not chain:  # Safety check for empty chain
-            self.log_message("⚠️ Real market chain is empty")
-            return
+            # Call our new API endpoint to get shared NIFTY data
+                       # Call our new API endpoint to get shared data for NIFTY
+            import requests
+            import strategy.strategy_config as config
             
-        spot = data.get("spot", 0)
-        
-        # Log Real Spot too
-        print(f"📈 NIFTY Spot: {spot}") 
+            # Get which index bot trades (should be ["NIFTY"] for now)
+            bot_indices = getattr(config, "BOT_TRADED_INDICES", ["NIFTY"])
+            bot_index = bot_indices[0] if bot_indices else "NIFTY"
+            
+            # Get data for the index bot trades
+            response = requests.get(
+                f"http://localhost:8000/api/bot/market-data?index={bot_index}", 
+                timeout=5
+            )
+            data = response.json()
+            
+            if not data.get("success"):
+                self.log_message(f"❌ Failed to get shared {bot_index} data")
+                return
+            
+            chain = data.get("data", [])
+            if not chain:
+                self.log_message("⚠️ Shared NIFTY chain is empty")
+                return
+            
+            spot = data.get("spot", 0)
+            
+             # Log freshness with DETAILS
+            timestamp = data.get("timestamp", 0)
+            current_time_now = time.time()
+            age = current_time_now - timestamp
+            
+            self.log_message(f"🕒 Data Age: {age:.1f} seconds (fresh if < 5)")
+            if data.get("is_fresh"):
+                self.log_message("✅ Using FRESH shared NIFTY data")
+            else:
+                self.log_message("⚠️ Using STALE shared NIFTY data")
+                
+            # Find highest OI strikes
+            best_ce, best_pe = self.tracker.find_highest_oi(chain)
+            self.log_message(f"📊 Highest OI -> CE: {best_ce} | PE: {best_pe}")
+            
+            # Check stability
+            report = self.tracker.check_stability(best_ce, best_pe)
+            
+            # Check CE trades
+            if len(self.active_ce_trades) < config.MAX_OPEN_POSITIONS:
+                if best_ce in self.cooldown_list and current_time < self.cooldown_list[best_ce]:
+                    self.log_message(f"   🧊 CE {best_ce} is in Cooldown.")
+                elif report['ce_stable']: 
+                    self.log_message(f"🔍 DEBUG: CE {best_ce} is STABLE, calling check_entry")
+                    self.check_entry(chain, best_ce, "CE", current_time)
+                else: 
+                    self.log_message(f"   ⏳ CE {best_ce}: Waiting for stability.")
+            else:
+                self.log_message(f"🔍 DEBUG: CE MAX REACHED: {len(self.active_ce_trades)}/{config.MAX_OPEN_POSITIONS}")
+            
+            # Check PE trades  
+            if len(self.active_pe_trades) < config.MAX_OPEN_POSITIONS:
+                if best_pe in self.cooldown_list and current_time < self.cooldown_list[best_pe]:
+                    self.log_message(f"   🧊 PE {best_pe} is in Cooldown.")
+                elif report['pe_stable']: 
+                    self.check_entry(chain, best_pe, "PE", current_time)
+                else: 
+                    self.log_message(f"   ⏳ PE {best_pe}: Waiting for stability.")
+                    
+        except Exception as e:
+            self.log_message(f"❌ Error in scan_market: {e}")
+            return
 
-        best_ce, best_pe = self.tracker.find_highest_oi(chain)
-        self.log_message(f"📊 Highest OI -> CE: {best_ce} | PE: {best_pe}")
-        report = self.tracker.check_stability(best_ce, best_pe)
-        self.log_message(f"🔍 DEBUG: CE trades={len(self.active_ce_trades)}, Max={config.MAX_OPEN_POSITIONS}, Can take more={len(self.active_ce_trades) < config.MAX_OPEN_POSITIONS}")
-        
-        if len(self.active_ce_trades) < config.MAX_OPEN_POSITIONS:
-            if best_ce in self.cooldown_list and current_time < self.cooldown_list[best_ce]:
-                 self.log_message(f"   🧊 CE {best_ce} is in Cooldown.")
-            elif report['ce_stable']: 
-                self.log_message(f"🔍 DEBUG: CE {best_ce} is STABLE, calling check_entry")
-                self.check_entry(chain, best_ce, "CE", current_time)
-            else: 
-                self.log_message(f"   ⏳ CE {best_ce}: Waiting for stability.")
-        else:
-            self.log_message(f"🔍 DEBUG: CE MAX REACHED: {len(self.active_ce_trades)}/{config.MAX_OPEN_POSITIONS}")
-        
-
-        if len(self.active_pe_trades) < config.MAX_OPEN_POSITIONS:
-            if best_pe in self.cooldown_list and current_time < self.cooldown_list[best_pe]:
-                 self.log_message(f"   🧊 PE {best_pe} is in Cooldown.")
-            elif report['pe_stable']: 
-                self.check_entry(chain, best_pe, "PE", current_time)
-            else: 
-                self.log_message(f"   ⏳ PE {best_pe}: Waiting for stability.")
-  
+      
     def check_entry(self, chain, strike, type, current_time):
         active_list = self.active_ce_trades if type == "CE" else self.active_pe_trades
         for t in active_list:

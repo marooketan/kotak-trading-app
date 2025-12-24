@@ -1,16 +1,10 @@
 {
     "current_user": "ketan",
     "sessions": {
-        "kavita": {
-            "base_url": "https://cis.kotaksecurities.com",
-            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6WyJUcmFkZSJdLCJleHAiOjE3NjY0MjgyMDAsImp0aSI6IjRkNzI3YzcxLTc4MjgtNDE2Ny1iMmFjLTBiZTYxOThjZTNmMyIsImlhdCI6MTc2NjQwODQxMSwiaXNzIjoibG9naW4tc2VydmljZSIsInN1YiI6IjQ5ODIyYTIzLTIwMDktNGJlZi05OTQ2LTUwMzAzNzJiMTY5ZiIsInVjYyI6IlgxTjM1IiwibmFwIjoiIiwieWNlIjoiZVlcXDYjJSw1XCJ5XHUwMDA1XG5ccnVcdTAwMDBcdTAwMTBiIiwiZmV0Y2hjYWNoaW5ncnVsZSI6MCwiY2F0ZWdvcmlzYXRpb24iOiIifQ.ft6DT7w0rEphszJKBhl7Jy85xbDvBcS0pS0_KgL1sSCX4PKyNy9iVt_eUjeeiyG26n8AzjTO3EYX7zj_u5Kb2qFMlbQn-Sr5yZBNxX4Vj0LpXxOcgF5704T4uKJJS85AOuTjafUEIXeD6f4O_gK2pwAx2gJbtwleggqqpdtd_QGXiFuzjIvgCTk-LCWzvgafBAlA0JA3CkTklGQGz6MCI00AapIgIjK4Jaw66MmpDBiOaFC_Wj1JN4bBPYkvB-6yxgn4vT-ucvKBJoHEyv4Y4UiFT5gtnUFzvtYRLcepYDMUddXnHfgnT-ollax7ORvNQp14AdnLoU2ZJF6AusJo9Q",
-            "sid": "add5877f-caaf-4d20-8115-0ff741f77708",
-            "authenticated": true
-        },
         "ketan": {
             "base_url": "https://mis.kotaksecurities.com",
-            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6WyJUcmFkZSJdLCJleHAiOjE3NjY0MjgyMDAsImp0aSI6IjA3OWMyYTMzLWQyNTYtNGNkOC1hNjk2LWMzNzQ4MWY1NTk3ZSIsImlhdCI6MTc2NjQwODQ0MiwiaXNzIjoibG9naW4tc2VydmljZSIsInN1YiI6IjZhZTYwYmU5LWJkY2MtNDMwOS1hMTQ2LWJjODBlZTU5YzFiMSIsInVjYyI6IlpIMzI5IiwibmFwIjoiIiwieWNlIjoiZVlcXDYgJD81XCJyXHUwMDAyXHUwMDBlXHUwMDAyZFx1MDAwMFx1MDAxMGIiLCJmZXRjaGNhY2hpbmdydWxlIjowLCJjYXRlZ29yaXNhdGlvbiI6IiJ9.MQy9Hd_Vz5S90t7a7kz4FqMA54-CYZ7iCjtziK2wD8CI2Pubtiol_vs1zUh7Xw_zUGwDtO8RFcvvSchrHFIg4_8_t4G2ErRYN-rc366OxNm9LSuQNfmCEAfxpBrCiAsfFfGF7Gle9wMBRlK2ffK_pfGkLTpgkOAPX5LumwR_HuzojMJ4tmnHqNb4LVmOH5kwbH2_zMrugFEEd0beKOpepJ4BWO5_ar_tgqlJb9mps9N8tShdWiTnNKhuN9IZh_HZg2t1XiKuoSCSbMbbpy5mLHQ8X58OBI-Lvhzl1bmS1WjtkUcEgGUxVqWRjiNaGDGu4h41AFl5_SFyDRyMqM4SBw",
-            "sid": "2b15fd51-980f-47b9-944f-98bc0d7c5103",
+            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6WyJUcmFkZSJdLCJleHAiOjE3NjY2MDEwMDAsImp0aSI6ImQxMjhkNDc0LWUwNzUtNDIzNy05ZmZlLTBjM2JkN2JhNjIxZCIsImlhdCI6MTc2NjU3MDYyMywiaXNzIjoibG9naW4tc2VydmljZSIsInN1YiI6IjZhZTYwYmU5LWJkY2MtNDMwOS1hMTQ2LWJjODBlZTU5YzFiMSIsInVjYyI6IlpIMzI5IiwibmFwIjoiIiwieWNlIjoiZVlcXDYgJD81XCJyXHUwMDAyXHUwMDBlXHUwMDAyZFx1MDAwMFx1MDAxMGIiLCJmZXRjaGNhY2hpbmdydWxlIjowLCJjYXRlZ29yaXNhdGlvbiI6IiJ9.mJKnki0gTo_g4QBuPdYkziSyUGUwnAA8zVjvYEwPl2ODEsjYGsZvABEph04DcfIGq5RZ0QKCNyaLR9PJbHwX3EZqTBBTF4oO41CjAdbnncaLarkMI5mWZSif10I668El4u8sg7wI0mzZn5mw2fwhi3xNFNQQ-F52XXsdboNzsiPWeVNIwpiG_nqIM4BgNzK9TFEsRp03_SkuW30gl_WFs_lQhZJE_PMfrCxrKONGuunTb4muxkO0e2TTT53Lr4Kixepm1coMvTPmoqopIF_CwJwhwvsEbqWPd4k5g70cDTGcsPJO6wAjbAV2iZG3QZf36Q-Kjt-9tu624F1W7MDCSw",
+            "sid": "7c0e9fcd-9c91-44c6-8a3c-ce44e5ca27da",
             "authenticated": true
         }
     }
