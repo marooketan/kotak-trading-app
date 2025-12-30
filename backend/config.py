@@ -1,26 +1,15 @@
-# KOTAK API CONFIGURATION - MULTI-USER
-USERS = {
-    "ketan": {
-        "access_token": "c80a89d3-1ef2-4a2f-9900-82393343a824",
-        "mobile_number": "+919227132381", 
-        "client_code": "ZH329"
-    },
-    "kavita": {
-        "access_token": "faab5107-d347-4f9f-a585-6fe32ad6c792",
-        "mobile_number": "+919227132387", 
-        "client_code": "X1N35"
-    }
-}
+# config.py
+import os
 
-# Market Indices
-MARKET_INDICES = {
-    "NFO": ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"],
-    "BFO": ["SENSEX", "BANKEX"]
-}
+# === CONFIGURATION ===
+MASTERFILENAME = "kotak_master_live.csv"
+MASTERPATH = os.path.join(os.path.expanduser("~"), "Desktop", MASTERFILENAME)
+BFO_MASTERFILENAME = "kotak_bfo_live.csv"
+BFO_MASTERPATH = os.path.join(os.path.expanduser("~"), "Desktop", BFO_MASTERFILENAME)
 
-# Refresh Intervals (in milliseconds)
-REFRESH_INTERVALS = {
-    "option_chain": 5000,
-    "index_prices": 30000,
-    "order_status": 10000 
-}
+# === FIX: USE ABSOLUTE PATHS SO SUB-FOLDERS CAN FIND THEM ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+USERS_FILE = os.path.join(BASE_DIR, "users.json")
+SESSION_FILE = os.path.join(BASE_DIR, "session_cache.json")
+
+MY_MPIN = "523698"

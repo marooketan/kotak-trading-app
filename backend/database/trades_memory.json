@@ -1319,9 +1319,251 @@
       "quantity": 7425,
       "stoploss": 122.16,
       "atp_at_entry": 101.8
+    },
+    {
+      "trade_id": "CE_26200_1766589417",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 68.1,
+      "entry_time": "2025-12-24 20:46:57",
+      "quantity": 750,
+      "stoploss": 122.16,
+      "atp_at_entry": 101.8
+    },
+    {
+      "trade_id": "CE_26200_1766589745",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 68.1,
+      "entry_time": "2025-12-24 20:52:25",
+      "quantity": 750,
+      "stoploss": 122.16,
+      "atp_at_entry": 101.8
+    },
+    {
+      "trade_id": "CE_26200_1766590294",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 68.1,
+      "entry_time": "2025-12-24 21:01:34",
+      "quantity": 750,
+      "stoploss": 122.16,
+      "atp_at_entry": 101.8
+    },
+    {
+      "trade_id": "CE_26200_1766597712",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 68.1,
+      "entry_time": "2025-12-24 23:05:12",
+      "quantity": 750,
+      "stoploss": 122.16,
+      "atp_at_entry": 101.8
+    },
+    {
+      "trade_id": "PE_26000_1766597712",
+      "symbol": "NIFTY25DEC26000CE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 27.95,
+      "entry_time": "2025-12-24 23:05:12",
+      "quantity": 750,
+      "stoploss": 33.54,
+      "atp_at_entry": 27.95
+    },
+    {
+      "trade_id": "CE_26200_1766667969",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 72.95,
+      "entry_time": "2025-12-25 18:36:09",
+      "quantity": 225,
+      "stoploss": 87.54,
+      "atp_at_entry": 72.95
+    },
+    {
+      "trade_id": "PE_26000_1766667969",
+      "symbol": "NIFTY25DEC26000CE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 28.5,
+      "entry_time": "2025-12-25 18:36:09",
+      "quantity": 225,
+      "stoploss": 34.2,
+      "atp_at_entry": 28.5
+    },
+    {
+      "trade_id": "CE_26200_1766671619",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 72.95,
+      "entry_time": "2025-12-25 19:36:59",
+      "quantity": 225,
+      "stoploss": 87.54,
+      "atp_at_entry": 72.95
+    },
+    {
+      "trade_id": "PE_26000_1766671619",
+      "symbol": "NIFTY25DEC26000CE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 28.5,
+      "entry_time": "2025-12-25 19:36:59",
+      "quantity": 225,
+      "stoploss": 34.2,
+      "atp_at_entry": 28.5
+    },
+    {
+      "trade_id": "CE_26200_1766673262",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 72.95,
+      "entry_time": "2025-12-25 20:04:22",
+      "quantity": 225,
+      "stoploss": 87.54,
+      "atp_at_entry": 72.95
+    },
+    {
+      "trade_id": "PE_26000_1766673262",
+      "symbol": "NIFTY25DEC26000CE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 28.5,
+      "entry_time": "2025-12-25 20:04:22",
+      "quantity": 225,
+      "stoploss": 34.2,
+      "atp_at_entry": 28.5
+    },
+    {
+      "trade_id": "CE_26100_1766734040",
+      "symbol": "NIFTY25DEC26100CE",
+      "option_type": "CE",
+      "strike": 26100,
+      "entry_price": 49.3,
+      "entry_time": "2025-12-26 12:57:20",
+      "quantity": 75,
+      "stoploss": 83.0,
+      "atp_at_entry": 69.17
+    },
+    {
+      "trade_id": "CE_26100_1766740283",
+      "symbol": "NIFTY25DEC26100CE",
+      "option_type": "CE",
+      "strike": 26100,
+      "entry_price": 44.25,
+      "entry_time": "2025-12-26 14:41:23",
+      "quantity": 75,
+      "stoploss": 64.84,
+      "atp_at_entry": 64.71
+    },
+    {
+      "trade_id": "CE_26200_1766897599",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 21.55,
+      "entry_time": "2025-12-28 10:23:19",
+      "quantity": 225,
+      "stoploss": 25.85,
+      "atp_at_entry": 21.55
+    },
+    {
+      "trade_id": "PE_26000_1766897599",
+      "symbol": "NIFTY25DEC26000PE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 41.1,
+      "entry_time": "2025-12-28 10:23:19",
+      "quantity": 225,
+      "stoploss": 49.3,
+      "atp_at_entry": 41.1
+    },
+    {
+      "trade_id": "CE_26200_1766898597",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 21.55,
+      "entry_time": "2025-12-28 10:39:57",
+      "quantity": 225,
+      "stoploss": 25.85,
+      "atp_at_entry": 21.55
+    },
+    {
+      "trade_id": "PE_26000_1766898597",
+      "symbol": "NIFTY25DEC26000PE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 41.1,
+      "entry_time": "2025-12-28 10:39:57",
+      "quantity": 225,
+      "stoploss": 49.3,
+      "atp_at_entry": 41.1
+    },
+    {
+      "trade_id": "CE_26200_1766900087",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 21.55,
+      "entry_time": "2025-12-28 11:04:47",
+      "quantity": 225,
+      "stoploss": 25.85,
+      "atp_at_entry": 21.55
+    },
+    {
+      "trade_id": "PE_26000_1766900087",
+      "symbol": "NIFTY25DEC26000PE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 41.1,
+      "entry_time": "2025-12-28 11:04:47",
+      "quantity": 225,
+      "stoploss": 49.3,
+      "atp_at_entry": 41.1
+    },
+    {
+      "trade_id": "CE_26200_1766907290",
+      "symbol": "NIFTY25DEC26200CE",
+      "option_type": "CE",
+      "strike": 26200,
+      "entry_price": 21.55,
+      "entry_time": "2025-12-28 13:04:50",
+      "quantity": 225,
+      "stoploss": 25.85,
+      "atp_at_entry": 21.55
+    },
+    {
+      "trade_id": "PE_26000_1766907290",
+      "symbol": "NIFTY25DEC26000PE",
+      "option_type": "PE",
+      "strike": 26000,
+      "entry_price": 41.1,
+      "entry_time": "2025-12-28 13:04:50",
+      "quantity": 225,
+      "stoploss": 49.3,
+      "atp_at_entry": 41.1
+    },
+    {
+      "trade_id": "CE_26100_1766982452",
+      "symbol": "NIFTY25DEC26100CE",
+      "option_type": "CE",
+      "strike": 26100,
+      "entry_price": 37.9,
+      "entry_time": "2025-12-29 09:57:32",
+      "quantity": 75,
+      "stoploss": 45.65,
+      "atp_at_entry": 45.57
     }
   ],
   "trade_history": [],
   "strategy_settings": {},
-  "last_saved": "2025-12-24 15:57:49.766952"
+  "last_saved": "2025-12-29 09:58:50.514003"
 }

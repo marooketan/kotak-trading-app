@@ -7,11 +7,13 @@ from strategy.state import StrategyState
 from database.memory_helper import TradeMemory
 from strategy.oi_tracker import OITracker
 from watchdog.observers import Observer
+import importlib
 from watchdog.events import FileSystemEventHandler
 import json
 import threading
 from strategy.demo_data import DemoMarket
 demo = DemoMarket()
+from trade_history import save_trade_to_history
 
 
 # === THE TRADE FILE FOLDER ===
@@ -23,6 +25,8 @@ class Trade:
         self.sl_price = sl_price
         self.entry_time = entry_time
         self.pnl = 0.0
+                
+
         self.current_ltp = entry_price 
         self.entry_order_id = order_id
         self.sl_order_id = sl_order_id
@@ -45,7 +49,7 @@ class StrategyEngine:
         self.current_state = StrategyState.IDLE
         self.tracker = OITracker()
         self.is_running = False
-        
+        self.entry_retries = {}   # { "CE_26200": retry_count }
         self.active_ce_trades = []
         self.active_pe_trades = []
         self.exited_trades = []  # Stores all closed trades
@@ -53,12 +57,14 @@ class StrategyEngine:
         self.last_sl_update_time = time.time()
         self.memory = TradeMemory()
         self.buffer_timers = {}  # format: {"CE_26200": entry_timestamp}
+        self.sl_hit_counter = {}  # Track how many times each strike hits SL
 
     def reload_config(self):
         """Reload config when file changes"""
         try:
             import strategy.strategy_config
             importlib.reload(strategy.strategy_config)
+            print(f"🔄 RELOAD DEBUG: PAPER_TRADING = {strategy.strategy_config.PAPER_TRADING}")
             self.log_message("✅ Config reloaded!")
         except Exception as e:
             self.log_message(f"❌ Failed to reload: {e}") 
@@ -158,6 +164,7 @@ class StrategyEngine:
 
     # === EXECUTION HANDLERS ===
     def execute_broker_entry(self, symbol, type, quantity):
+        print("🔧 DEBUG PAPER_TRADING VALUE:", config.PAPER_TRADING)  # ADD THIS LINE
         if config.PAPER_TRADING:
             return "PAPER_ORD_" + str(int(time.time()))
         
@@ -173,8 +180,9 @@ class StrategyEngine:
             return "PAPER_SL_" + str(int(time.time()))
         
         trigger_val = sl_price 
-        limit_val = round(sl_price + 0.5, 1)
-        self.log_message(f"🛡️ PLACING SL: {symbol} | Trig: {trigger_val}")
+        limit_val = round(sl_price + config.SL_LIMIT_BUFFER, 1)
+
+        self.log_message(f"🛡️ PLACING SL: {symbol} | Trig: {trigger_val} | Limit: {limit_val}")
         
         res = self.api.place_order(trading_symbol=symbol, transaction_type="B", quantity=quantity, product_code="NRML", order_type="SL", price=str(limit_val), trigger_price=str(trigger_val))
         if res.get("success"): return res.get("order_number")
@@ -205,6 +213,25 @@ class StrategyEngine:
                     return order.get("ordSt", "UNKNOWN")
             return "NOT_FOUND"
         except: return "ERROR"
+    def get_position_qty(self, symbol):
+        try:
+            positions = self.api.get_positions()
+            if not positions or not positions.get("success"):
+                return 0
+
+            for pos in positions.get("data", []):
+                if pos.get("tradingSymbol") == symbol:
+                    try:
+                        return int(float(pos.get("netQty", 0)))
+                    except:
+                        return 0
+
+            return 0
+        except Exception as e:
+            self.log_message(f"⚠️ Position check failed: {e}")
+            return 0
+    
+    
 
     def square_off_all(self):
         all_trades = self.active_ce_trades + self.active_pe_trades
@@ -216,16 +243,33 @@ class StrategyEngine:
 
     # === MANAGING TRADES ===
     def manage_active_trades(self, current_time):
+
         # Read config fresh each time
         import strategy.strategy_config as config
+
+        # === DAILY P&L KILL SWITCH CHECK ===
+        total_pnl = 0.0
+        for t in (self.active_ce_trades + self.active_pe_trades):
+            total_pnl += t.pnl
+
+        if total_pnl <= -config.MAX_DAILY_LOSS:
+            self.log_message(f"🛑 MAX DAILY LOSS HIT: ₹{total_pnl}. STOPPING BOT.")
+            self.square_off_all()
+            self.stop()
+            return
+
+        if total_pnl >= config.DAILY_TARGET_PROFIT:
+            self.log_message(f"🎯 DAILY TARGET ACHIEVED: ₹{total_pnl}. STOPPING BOT.")
+            self.square_off_all()
+            self.stop()
+            return
+
         should_update_sl = (current_time - self.last_sl_update_time) >= config.SL_UPDATE_INTERVAL
-        
         if should_update_sl:
             self.last_sl_update_time = current_time
 
         all_trades = self.active_ce_trades + self.active_pe_trades
-        
-        if not all_trades: 
+        if not all_trades:
             return
 
         # === DATA SOURCE (DEMO vs LIVE) ===
@@ -233,10 +277,10 @@ class StrategyEngine:
             chain = demo.get_chain()
         else:
             expiries = self.api.get_expiries("NIFTY", "NFO")
-            if not expiries: 
+            if not expiries:
                 return
             data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
-            if not data or not data.get("success"): 
+            if not data or not data.get("success"):
                 return
             chain = data.get("data", [])
             if not chain:
@@ -246,56 +290,73 @@ class StrategyEngine:
         # === FAST BUFFER TIMER CHECKS (every 2 seconds) ===
         if self.buffer_timers and chain:
             for timer_key in list(self.buffer_timers.keys()):
-                # Parse key: "CE_26200"
                 try:
                     option_type, strike_str = timer_key.split("_")
                     strike = int(strike_str)
                 except:
                     continue
-                
-                # Find current price from chain
+
                 row = self.get_data_for_strike(chain, strike)
                 if not row:
                     continue
-                
+                print("🔍 DEBUG ROW KEYS:", row.keys())
                 key = "call" if option_type == "CE" else "put"
                 try:
                     ltp = float(row[key].get('ltp', 0))
                     atp = float(row[key].get('atp', 0))
                 except:
                     continue
-                
-                # Check buffer
+                # 🛑 ADD THIS CHECK:
+                if ltp <= 0 or atp <= 0:
+                    self.log_message(f"⚠️ Bad data for {trade.type} {trade.strike}, skipping update")
+                    continue
                 max_allowed = atp - (atp * config.MIN_BUFFER_PERCENTAGE)
                 min_allowed = atp - (atp * config.MAX_BUFFER_PERCENTAGE)
-                
+
                 if not (min_allowed <= ltp <= max_allowed):
-                    # Price left buffer - CLEAR TIMER
                     del self.buffer_timers[timer_key]
                     self.log_message(f"🔄 {timer_key} left buffer. Timer reset.")
 
         # === MANAGE EXISTING TRADES ===
         for trade in all_trades:
             row = self.get_data_for_strike(chain, trade.strike)
-            if not row: 
+            if not row:
                 continue
-            
+
             key = 'call' if trade.type == "CE" else 'put'
             try:
                 ltp = float(row[key].get('ltp', 0))
                 atp = float(row[key].get('atp', 0))
-            except: 
+            except:
                 continue
-            
-            symbol = row.get("pTrdSymbol")
+            # 🛑 ADD THIS CHECK (NEW CODE):
+            if ltp <= 0 or atp <= 0:
+                 self.log_message(f"⚠️ Bad data for {trade.type} {trade.strike} (LTP:{ltp}, ATP:{atp}), skipping update")  
+                 continue
+            # Get correct symbol for the trade type
+            if trade.type == "CE":
+                symbol = row.get("pTrdSymbol")  # CE symbol
+            else:
+                # For PE trades, try to get PE symbol
+                # Check if 'put' dictionary has a symbol
+                put_data = row.get("put", {})
+                symbol = put_data.get("symbol") or put_data.get("tradingSymbol")
+    
+                # If still not found, construct PE symbol
+                if not symbol:
+                    # Format: NIFTY25DEC26000PE
+                    symbol = f"NIFTY25DEC{trade.strike}PE"
+         
+        
+
             trade.current_ltp = ltp
             trade.pnl = round((trade.entry_price - ltp) * trade.quantity, 2)
-            
+
             # SL CHECK
             if ltp > trade.sl_price:
                 self.log_message(f"💥 STOPLOSS HIT! {trade.type} {trade.strike} @ {ltp}")
                 self.close_trade(trade, "SL HIT", current_time)
-                continue 
+                continue
 
             # BREATHING UPDATE
             if should_update_sl:
@@ -306,11 +367,33 @@ class StrategyEngine:
                     self.log_message(f"📉 Tightening SL: {trade.sl_price} -> {potential_new_sl}")
                     trade.sl_price = potential_new_sl
                     if trade.sl_order_id:
-                        self.modify_broker_sl(trade.sl_order_id, potential_new_sl, symbol)    
+                        self.modify_broker_sl(trade.sl_order_id, potential_new_sl, symbol)
+
 
     def close_trade(self, trade, reason, current_time):
         # Save exited trade to memory
         self.exited_trades.append(trade)
+        # === SAVE TRADE TO JSON HISTORY (AUTO EXIT) ===
+        trade_data = {
+            "trade_id": f"{trade.type}_{trade.strike}_{int(trade.entry_time)}",
+            "mode": "PAPER" if config.PAPER_TRADING else "LIVE",
+            "symbol": "NIFTY",
+            "type": trade.type,
+            "strike": trade.strike,
+            "entry_price": trade.entry_price,
+            "exit_price": trade.current_ltp,
+            "quantity": trade.quantity,
+            "pnl": trade.pnl,
+            "entry_time": trade.entry_time,
+            "exit_time": int(current_time),
+            "date": time.strftime("%Y-%m-%d"),
+            "reason": reason
+        }
+
+        save_trade_to_history(trade_data)
+
+
+
         self.log_message(f"❌ CLOSING TRADE: {trade.type} {trade.strike} [{reason}]")
         self.exit_broker_trade(trade)
         if trade.type == "CE": self.active_ce_trades.remove(trade)
@@ -318,6 +401,16 @@ class StrategyEngine:
         
         trade_id_to_remove = f"{trade.type}_{trade.strike}_{int(trade.entry_time)}"
         self.memory.remove_trade(trade_id_to_remove)
+        # COUNT SL HITS (NEW CODE) - ADD HERE
+        if reason == "SL HIT":
+            strike = trade.strike
+            if strike not in self.sl_hit_counter:
+                self.sl_hit_counter[strike] = 1
+            else:
+                self.sl_hit_counter[strike] += 1
+            
+            self.log_message(f"📊 Strike {strike} SL hits: {self.sl_hit_counter[strike]}")
+
         
         unlock_time = current_time + config.COOLDOWN_SECONDS
         self.cooldown_list[trade.strike] = unlock_time
@@ -353,6 +446,17 @@ class StrategyEngine:
             if not chain:
                 self.log_message("⚠️ Shared NIFTY chain is empty")
                 return
+
+            # 🛑 ADD THIS CHECK (NEW CODE):
+            # Check if chain has valid data (not all zeros)
+            valid_strikes = 0
+            for row in chain:
+                if float(row.get("call", {}).get("ltp", 0)) > 0 or float(row.get("put", {}).get("ltp", 0)) > 0:
+                    valid_strikes += 1
+
+            if valid_strikes < 5:  # If less than 5 strikes have valid data
+                self.log_message(f"⚠️ Chain quality poor: {valid_strikes}/{len(chain)} valid strikes. Skipping scan.")
+                return
             
             spot = data.get("spot", 0)
             
@@ -360,6 +464,11 @@ class StrategyEngine:
             timestamp = data.get("timestamp", 0)
             current_time_now = time.time()
             age = current_time_now - timestamp
+            if age > 2:
+                self.log_message(f"⛔ STALE DATA ({age:.1f}s) — scan skipped")
+                return
+            print(f"📤 READ {bot_index} | ts={timestamp} | age={age:.1f}")
+
             
             self.log_message(f"🕒 Data Age: {age:.1f} seconds (fresh if < 5)")
             if data.get("is_fresh"):
@@ -398,14 +507,20 @@ class StrategyEngine:
         except Exception as e:
             self.log_message(f"❌ Error in scan_market: {e}")
             return
-
-      
     def check_entry(self, chain, strike, type, current_time):
+        # Do not take same strike again
         active_list = self.active_ce_trades if type == "CE" else self.active_pe_trades
         for t in active_list:
             if t.strike == strike:
                 return
-
+        
+        # ✅ ADD MAX RETRIES CHECK HERE (NEW CODE)
+        max_retries = config.MAX_RETRIES_PER_STRIKE
+        if strike in self.sl_hit_counter and self.sl_hit_counter[strike] >= max_retries:
+            self.log_message(f"🛑 STOP! Strike {strike} hit SL {self.sl_hit_counter[strike]} times (max:{max_retries}) - Skipping entire day")
+            return  # Don't enter trade
+                   
+    
         row = self.get_data_for_strike(chain, strike)
         if not row:
             return
@@ -415,101 +530,113 @@ class StrategyEngine:
             ltp = float(row[key].get("ltp", 0))
             atp = float(row[key].get("atp", 0))
             oi = float(row[key].get("oi", 0))
-        except ValueError:
+        except:
             return
+        # 🛑 ZERO-DATA SAFETY (CRITICAL)
+        if ltp <= 0 or atp <= 0 or oi <= 0:
+            self.log_message(f"⏸️ Skipping {type} {strike} due to invalid data (LTP:{ltp}, ATP:{atp}, OI:{oi})")
+            return  
 
-        symbol = row.get("pTrdSymbol")
+        # Resolve symbol
+        if type == "CE":
+            symbol = row.get("pTrdSymbol")
+        else:
+            put_data = row.get("put", {})
+            symbol = put_data.get("pTrdSymbol")
+            if not symbol:
+                symbol = f"NIFTY25DEC{strike}PE"
 
-        # Buffer Checks
+        # Buffer calculation
         max_allowed_price = atp - (atp * config.MIN_BUFFER_PERCENTAGE)
         min_allowed_price = atp - (atp * config.MAX_BUFFER_PERCENTAGE)
 
-        # Log the check details
         self.log_message(
-            f" ➤ {type} {strike} Check: LTP {ltp} vs Buffer {min_allowed_price:.1f}-{max_allowed_price:.1f} | ATP {atp} | OI {oi}")
+            f" ➤ {type} {strike} Check: LTP {ltp} vs Buffer {min_allowed_price:.1f}-{max_allowed_price:.1f} | ATP {atp} | OI {oi}"
+        )
 
         # Entry condition
-        if ltp <= max_allowed_price and ltp >= min_allowed_price:
-            # 60-second buffer rule
-            timer_key = f"{type}_{strike}"
-            
-            if timer_key not in self.buffer_timers:
-                # First time in buffer - start timer
-                self.buffer_timers[timer_key] = current_time
-                self.log_message(f"⏳ {type} {strike} entered buffer. Timer started. Need 60s.")
-                return  # Wait next check
-            
-            # Check if 60 seconds passed
-            time_in_buffer = current_time - self.buffer_timers[timer_key]
-            
-            if time_in_buffer < 60:
-                self.log_message(f"⏳ {type} {strike} in buffer for {int(time_in_buffer)}/60s")
-                return  # Not yet 60 seconds
-            
-            # 60 seconds completed - TAKE TRADE!
-            del self.buffer_timers[timer_key]  # Clear timer
-            self.log_message(f"🚀 EXECUTION SIGNAL: {type} {strike} @ {ltp} (60s in buffer ✓)")
-
-            qty = 75
-            try:
-                if hasattr(self.api, "nfo_master_df") and self.api.nfo_master_df is not None:
-                    df = self.api.nfo_master_df
-                    found_row = df[df["pTrdSymbol"].astype(str).str.strip() == symbol]
-                    if not found_row.empty:
-                        raw_lot_size = int(found_row.iloc[0]["lLotSize"])
-                        qty = raw_lot_size * config.LOTS_MULTIPLIER
-                        self.log_message(
-                            f"🧮 Quantity Calc: {raw_lot_size} (Lot) x {config.LOTS_MULTIPLIER} (Mult) = {qty}"
-                        )
-            except Exception as e:
-                self.log_message(f"⚠️ Quantity Error: {e}. Using default 25.")
-
-            order_id = self.execute_broker_entry(symbol, type, qty)
-
-            if order_id:
-                if not config.PAPER_TRADING:
-                    self.log_message("⏳ Waiting 2s for Broker...")
-                    time.sleep(2)
-                    status = self.verify_order_status(order_id)
-                    if "REJECTED" in status.upper():
-                        self.log_message("❌ ORDER REJECTED.")
-                        return
-
-                sl_val = atp + (atp * config.SL_PERCENTAGE)
-                initial_sl = round(sl_val, 2)
-
-                time.sleep(1)
-                sl_id = self.execute_broker_sl(symbol, type, qty, initial_sl)
-
-                new_trade = Trade(strike, type, ltp, initial_sl, current_time, order_id, sl_id)
-                new_trade.quantity = qty
-
-                trade_dict = {
-                    "trade_id": f"{type}_{strike}_{int(current_time)}",
-                    "symbol": symbol,
-                    "option_type": type,
-                    "strike": strike,
-                    "entry_price": ltp,
-                    "entry_time": datetime.datetime.fromtimestamp(current_time).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    "quantity": qty,
-                    "stoploss": initial_sl,
-                    "atp_at_entry": atp,
-                }
-                self.memory.save_trade(trade_dict)
-
-                if type == "CE":
-                    self.active_ce_trades.append(new_trade)
-                else:
-                    self.active_pe_trades.append(new_trade)
-
-                self.log_message(
-                    f"✅ Trade Active: {type} {strike} | Qty: {qty} | SL: {initial_sl}"
-                )
-        else:
-            # Price NOT in buffer - clear timer if exists
+        if not (min_allowed_price <= ltp <= max_allowed_price):
             timer_key = f"{type}_{strike}"
             if timer_key in self.buffer_timers:
                 del self.buffer_timers[timer_key]
                 self.log_message(f"↔️ {type} {strike} left buffer. Timer cleared.")
+            return
+
+        # 60-second buffer timer
+        timer_key = f"{type}_{strike}"
+        if timer_key not in self.buffer_timers:
+            self.buffer_timers[timer_key] = current_time
+            self.log_message(f"⏳ {type} {strike} entered buffer. Timer started. Need 60s.")
+            return
+
+        time_in_buffer = current_time - self.buffer_timers[timer_key]
+        if time_in_buffer < 60:
+            self.log_message(f"⏳ {type} {strike} in buffer for {int(time_in_buffer)}/60s")
+            return
+
+        # Execute trade
+        del self.buffer_timers[timer_key]
+        self.log_message(f"🚀 EXECUTION SIGNAL: {type} {strike} @ {ltp} (60s in buffer ✓)")
+
+        # Quantity
+        qty = 75
+        try:
+            if hasattr(self.api, "nfo_master_df") and self.api.nfo_master_df is not None:
+                df = self.api.nfo_master_df
+                found = df[df["pTrdSymbol"].astype(str).str.strip() == symbol]
+                if not found.empty:
+                    lot = int(found.iloc[0]["lLotSize"])
+                    qty = lot * config.LOTS_MULTIPLIER
+                    self.log_message(f"🧮 Quantity: {lot} x {config.LOTS_MULTIPLIER} = {qty}")
+        except:
+            pass
+
+        # Place SELL order
+        order_id = self.execute_broker_entry(symbol, type, qty)
+        if not order_id:
+            self.log_message(f"❌ Order failed for {type} {strike}")
+            return
+
+        self.log_message("✅ Trade confirmed")
+
+        # Place SL
+        sl_val = atp + (atp * config.SL_PERCENTAGE)
+        initial_sl = round(round(sl_val / 0.05) * 0.05, 2)
+        sl_id = self.execute_broker_sl(symbol, type, qty, initial_sl)
+
+        # Create trade object
+        new_trade = Trade(
+            strike=strike,
+            type=type,
+            entry_price=ltp,
+            sl_price=initial_sl,
+            entry_time=current_time,
+            order_id=order_id,
+            sl_order_id=sl_id
+        )
+        new_trade.quantity = qty
+
+        self.memory.save_trade({
+            "trade_id": f"{type}_{strike}_{int(current_time)}",
+            "symbol": symbol,
+            "option_type": type,
+            "strike": strike,
+            "entry_price": ltp,
+            "entry_time": datetime.datetime.fromtimestamp(current_time).strftime("%Y-%m-%d %H:%M:%S"),
+            "quantity": qty,
+            "stoploss": initial_sl,
+            "atp_at_entry": atp,
+        })
+
+        if type == "CE":
+            self.active_ce_trades.append(new_trade)
+        else:
+            self.active_pe_trades.append(new_trade)
+
+        # Lock strike
+        self.cooldown_list[strike] = current_time + config.COOLDOWN_SECONDS
+
+        self.log_message(
+            f"✅ Trade Active: {type} {strike} | Qty: {qty} | SL: {initial_sl}"
+        )
+    
