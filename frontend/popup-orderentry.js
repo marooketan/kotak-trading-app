@@ -49,6 +49,46 @@ PopupManager.prototype.setupOrderEntryWindow = function () {
             const orderDetails = this.getOrderDetailsFromForm();
             console.log('🍕 Popup submit orderDetails =', orderDetails);
 
+            // === NEW: STOPLOSS VALIDATION LOGIC ===
+            const isBuy = orderDetails.action === 'BUY';
+            // We use the "snapshot" price from dataset for validation safety
+            const ltp = parseFloat(document.getElementById('orderEntryWindow').dataset.currentPrice) || 0;
+            const trigger = orderDetails.triggerPrice;
+            const price = orderDetails.price;
+
+            // Only run checks if it is a Stoploss order
+            if (orderDetails.priceType === 'SL' || orderDetails.priceType === 'SL-M') {
+                if (trigger <= 0) {
+                    alert('⚠️ Trigger Price must be greater than 0');
+                    return; // Stop here
+                }
+
+                if (isBuy) {
+                    // Rule: BUY Stoploss must be HIGHER than current market price
+                    if (trigger <= ltp) {
+                        alert(`⚠️ BUY SL Error:\nTrigger Price (${trigger}) must be HIGHER than LTP (${ltp})`);
+                        return;
+                    }
+                    // Rule: Limit Price must be >= Trigger (otherwise it won't fill)
+                    if (orderDetails.priceType === 'SL' && price < trigger) {
+                        alert(`⚠️ BUY SL Error:\nLimit Price (${price}) must be >= Trigger Price (${trigger})`);
+                        return;
+                    }
+                } else {
+                    // Rule: SELL Stoploss must be LOWER than current market price
+                    if (trigger >= ltp) {
+                        alert(`⚠️ SELL SL Error:\nTrigger Price (${trigger}) must be LOWER than LTP (${ltp})`);
+                        return;
+                    }
+                    // Rule: Limit Price must be <= Trigger
+                    if (orderDetails.priceType === 'SL' && price > trigger) {
+                        alert(`⚠️ SELL SL Error:\nLimit Price (${price}) must be <= Trigger Price (${trigger})`);
+                        return;
+                    }
+                }
+            }
+            // === END VALIDATION ===
+
             const dashboard = window.dashboard || (window.opener ? window.opener.dashboard : null);
 
             if (dashboard && typeof dashboard.placeConfirmedOrder === 'function') {
@@ -99,47 +139,71 @@ PopupManager.prototype.setupOrderEntryWindow = function () {
     this.windows.set('orderEntryWindow', winElement);
 };
 PopupManager.prototype.openOrderEntry = async function (orderDetails) {
+    // 1. Basic Fields
     document.getElementById('orderSymbol').value = orderDetails.symbol;
-        document.getElementById('orderStrike').value = orderDetails.strike;
-        document.getElementById('orderOptionType').value = orderDetails.optionType;
-        const orderEntryWindow = document.getElementById('orderEntryWindow');
-        orderEntryWindow.dataset.currentPrice = orderDetails.price;
+    document.getElementById('orderStrike').value = orderDetails.strike;
+    document.getElementById('orderOptionType').value = orderDetails.optionType;
+    
+    const orderEntryWindow = document.getElementById('orderEntryWindow');
+    orderEntryWindow.dataset.currentPrice = orderDetails.price; // or LTP
 
-        this.setOrderAction(orderDetails.action || 'BUY');
-        document.getElementById('orderQty').value = 1;
-        document.getElementById('orderTypeSelect').value = orderDetails.product || 'NRML';
-        document.getElementById('priceTypeSelect').value = 'MARKET';
-        this.toggleLimitPrice('MARKET');
+    this.setOrderAction(orderDetails.action || 'BUY');
+    
+    // 2. Pre-fill Type & Product (Respect incoming data!)
+    document.getElementById('orderTypeSelect').value = orderDetails.product || 'NRML';
+    const pType = orderDetails.priceType || 'MARKET';
+    document.getElementById('priceTypeSelect').value = pType;
 
-        document.querySelector('.qty-help').textContent = '🔄 Fetching lot size...';
-        document.getElementById('totalQty').textContent = 'Calculating...';
+    // 3. Handle Visibility of Inputs based on Type
+    this.toggleLimitPrice(pType);
 
-        try {
-            const response = await fetch(`/api/lot-size?symbol=${encodeURIComponent(orderDetails.symbol)}`);
-            const data = await response.json();
-            if (data.success) {
-                window.currentLotSize = data.lot_size;
-                document.querySelector('.qty-help').textContent = `1 lot = ${window.currentLotSize} units`;
-            } else throw new Error();
-        } catch (error) {
-            document.querySelector('.qty-help').textContent = '❌ Error';
-            document.getElementById('submitOrderBtn').disabled = true;
-            return;
-        }
-        
-        document.getElementById('submitOrderBtn').disabled = false;
-        this.calculateOrderSummary();
-        this.showWindow('orderEntryWindow');
-         // NEW: Auto-focus quantity input after window opens
-        setTimeout(() => {
-            const qtyInput = document.getElementById('orderQty');
-            if (qtyInput) {
-                qtyInput.focus();
-                qtyInput.select(); // Highlights the number
+    // 4. Pre-fill Prices (Crucial for Editing)
+    if (orderDetails.price) document.getElementById('limitPrice').value = orderDetails.price;
+    if (orderDetails.triggerPrice) document.getElementById('triggerPrice').value = orderDetails.triggerPrice;
+
+    // 5. Fetch Lot Size & Set Quantity
+    document.querySelector('.qty-help').textContent = '🔄 Fetching lot size...';
+    document.getElementById('totalQty').textContent = 'Calculating...';
+
+    try {
+        const response = await fetch(`/api/lot-size?symbol=${encodeURIComponent(orderDetails.symbol)}`);
+        const data = await response.json();
+        if (data.success) {
+            window.currentLotSize = data.lot_size;
+            document.querySelector('.qty-help').textContent = `1 lot = ${window.currentLotSize} units`;
+            
+            // 6. Set Quantity (Handle case where we saved Lots vs Total Qty)
+            // Assuming basket saves "quantity" as LOTS based on dashboard.js logic
+            // If orderDetails.quantity is large (e.g. 75), divide by lot size. 
+            // If it's small (e.g. 1), treat as lots.
+            let lots = orderDetails.quantity || 1;
+            
+            // Logic check: if quantity > 25 (likely total shares), convert to lots
+            if (lots > 25 && window.currentLotSize > 0) {
+                 lots = Math.round(lots / window.currentLotSize);
             }
-        }, 100);
-};
-PopupManager.prototype.setOrderAction = function (action) {
+            document.getElementById('orderQty').value = lots;
+
+        } else throw new Error();
+    } catch (error) {
+        document.querySelector('.qty-help').textContent = '❌ Error';
+        // Fallback
+        document.getElementById('orderQty').value = orderDetails.quantity || 1;
+    }
+    
+    document.getElementById('submitOrderBtn').disabled = false;
+    this.calculateOrderSummary();
+    this.showWindow('orderEntryWindow');
+    
+    // Auto-focus
+    setTimeout(() => {
+        const qtyInput = document.getElementById('orderQty');
+        if (qtyInput) {
+            qtyInput.focus();
+            qtyInput.select();
+        }
+    }, 100);
+};PopupManager.prototype.setOrderAction = function (action) {
     const safeAction = (action || 'BUY').toUpperCase();
         const buyBtn = document.getElementById('actionBuy');
         const sellBtn = document.getElementById('actionSell');
@@ -157,27 +221,54 @@ PopupManager.prototype.setOrderAction = function (action) {
 };
 
 PopupManager.prototype.toggleLimitPrice = function (priceType) {
-     document.getElementById('limitPriceGroup').style.display = priceType === 'LIMIT' ? 'block' : 'none';
+    const limitGroup = document.getElementById('limitPriceGroup');
+    const triggerGroup = document.getElementById('triggerPriceGroup');
+    
+    // Show Limit Price for LIMIT and SL
+    limitGroup.style.display = ['LIMIT', 'SL'].includes(priceType) ? 'block' : 'none';
+    
+    // Show Trigger Price for SL and SL-M
+    triggerGroup.style.display = ['SL', 'SL-M'].includes(priceType) ? 'block' : 'none';
+
 };
+
 PopupManager.prototype.getOrderDetailsFromForm = function () {
     const symbol = document.getElementById('orderSymbol').value;
-        const action = document.getElementById('actionBuy').classList.contains('buy-active') ? 'BUY' : 'SELL';
-        const qty = parseInt(document.getElementById('orderQty').value) || 1;
-        const priceType = document.getElementById('priceTypeSelect').value;
-        const limitPrice = parseFloat(document.getElementById('limitPrice').value) || 0;
-        const currentPrice = parseFloat(document.getElementById('orderEntryWindow').dataset.currentPrice) || 0;
-        
-        const totalQty = qty * (window.currentLotSize || 0);
-        const price = priceType === 'MARKET' ? currentPrice : limitPrice;
+    const action = document.getElementById('actionBuy').classList.contains('buy-active') ? 'BUY' : 'SELL';
+    const qty = parseInt(document.getElementById('orderQty').value) || 1;
+    const priceType = document.getElementById('priceTypeSelect').value;
+    
+    // Existing Limit Price
+    const limitPrice = parseFloat(document.getElementById('limitPrice').value) || 0;
+    
+    // NEW: Read Trigger Price
+    const triggerPrice = parseFloat(document.getElementById('triggerPrice').value) || 0;
+    
+    const currentPrice = parseFloat(document.getElementById('orderEntryWindow').dataset.currentPrice) || 0;
+    const totalQty = qty * (window.currentLotSize || 0);
 
-        return {
-            symbol, action, quantity: totalQty, price,
-            product: document.getElementById('orderTypeSelect').value || 'NRML',
-            priceType,
-            strike: document.getElementById('orderStrike').value,
-            optionType: document.getElementById('orderOptionType').value
-        };
+    // Determine the price to send based on type
+    let price = 0;
+    if (priceType === 'LIMIT' || priceType === 'SL') {
+        price = limitPrice;
+    } else if (priceType === 'MARKET') {
+        price = 0; 
+    }
+    // For SL-M, price is 0 (market), but triggerPrice carries the stop value.
+
+    return {
+        symbol, 
+        action, 
+        quantity: totalQty, 
+        price, 
+        triggerPrice, // Added to the result
+        product: document.getElementById('orderTypeSelect').value || 'NRML',
+        priceType,
+        strike: document.getElementById('orderStrike').value,
+        optionType: document.getElementById('orderOptionType').value
+    };
 };
+
 PopupManager.prototype.calculateOrderSummary = function () {
     const qty = parseInt(document.getElementById('orderQty').value) || 1;
         const priceType = document.getElementById('priceTypeSelect').value;
@@ -188,4 +279,30 @@ PopupManager.prototype.calculateOrderSummary = function () {
         document.getElementById('totalQty').textContent = totalQty;
         const price = priceType === 'MARKET' ? currentPrice : limitPrice;
         document.getElementById('estimatedAmount').textContent = `₹${(totalQty * price).toFixed(2)}`;
+};
+
+// NEW: Updates the Live LTP in the popup dynamically
+PopupManager.prototype.updateLivePrice = function (symbol, newPrice) {
+    const win = document.getElementById('orderEntryWindow');
+    // 1. Check if window is open
+    if (!win || win.style.display === 'none') return;
+
+    // 2. Check if the incoming price belongs to the symbol currently in the popup
+    const currentSymbol = document.getElementById('orderSymbol').value;
+    if (currentSymbol !== symbol) return;
+
+    // 3. Update the hidden dataset (Used for Validation logic)
+    win.dataset.currentPrice = newPrice;
+
+    // 4. Update the visual display (The Green Badge)
+    const display = document.getElementById('popupLiveLtp');
+    if (display) {
+        display.textContent = `LTP: ${parseFloat(newPrice).toFixed(2)}`;
+    }
+    
+    // 5. If "Market" order is selected, update the Estimated Amount in real-time
+    const priceType = document.getElementById('priceTypeSelect').value;
+    if (priceType === 'MARKET') {
+        this.calculateOrderSummary();
+    }
 };

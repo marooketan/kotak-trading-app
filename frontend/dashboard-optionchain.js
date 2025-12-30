@@ -42,9 +42,15 @@ constructor(dashboard, activityManager) {
     // 1. RACE CONDITION HANDLING
 if (this.isFetching) {
     if (this.fetchController) {
-        this.fetchController.abort();
-          
+        try {
+            this.fetchController.abort();
+            console.log("🔥 Aborted old request");
+        } catch (e) {
+            // Ignore abort errors
+        }
     }
+    // Reset the flag so new request can start
+    this.isFetching = false;
 }
    
 // 2. SETUP NEW REQUEST
@@ -65,10 +71,12 @@ const currentTicket = this.requestCounter;
     const expiry = document.getElementById('expirySelect')?.value;
     const strikes = document.getElementById('strikeCount')?.value || '10';
 
-    if (!expiry || expiry === 'Loading...') {
-        this.isFetching = false;
-        return;
-    }
+    if (!expiry) {
+    console.log("⏳ Waiting for expiry...")
+    setTimeout(() => this.loadOptionChain(), 100)
+    return
+}
+
 
     // === 3.5 FIX: SILENT LOADING ===
     const optionTable = document.getElementById('optionTable');
@@ -112,6 +120,7 @@ this.fetchController.signal.addEventListener('abort', () => {
         
         clearTimeout(timeoutId); // Cancel timeout if successful
         const data = await response.json();
+        
         const t1 = performance.now();
         const now = Date.now();
         if (now - lastOCLogTime > OC_LOG_INTERVAL) {
@@ -128,11 +137,10 @@ this.fetchController.signal.addEventListener('abort', () => {
         if (this.requestCounter !== currentTicket) return;
 
         if (data.success) {
-            const t2 = performance.now();
-            const now = Date.now();
-        if (now - lastOCLogTime > OC_LOG_INTERVAL) {
+    const now = Date.now();
+    if (now - lastOCLogTime > OC_LOG_INTERVAL) {
         console.log('[OC] Start render');
-        }
+    }
 
             this.displayOptionChain(data.data, data.spot, index);
 
@@ -140,7 +148,7 @@ this.fetchController.signal.addEventListener('abort', () => {
             
             // Hide loading only after success
             if (loadingDiv) loadingDiv.style.display = 'none';
-            if (optionTable) optionTable.style.display = 'table';
+            
         } else {
             console.error("Option Chain Error:", data.message);
             if (loadingDiv) {
@@ -339,9 +347,10 @@ if (typeof updateBasketLTP === 'function' &&
                     </td>
                     <td id="ce-bid-${row.strike}">${fmt(row.call.bid)}</td>
                     <td id="ce-ask-${row.strike}">${fmt(row.call.ask)}</td>
-                    <td id="ce-ltp-${row.strike}" class="price-cell" style="font-weight:bold;">${fmt(row.call.ltp)}</td>
+                    <td id="ce-ltp-${row.strike}" class="price-cell" style="font-weight:bold;">${row.call.ltp !== "0.00" ? fmt(row.call.ltp) : "-"}</td>
                     <td id="strike-cell-${row.strike}"><strong>${row.strike}</strong>${isATM ? ' <span style="color:#ffb300;font-weight:bold;">ATM</span>' : ''}</td>
-                    <td id="pe-ltp-${row.strike}" class="price-cell" style="font-weight:bold;">${fmt(row.put.ltp)}</td>
+                    <td id="pe-ltp-${row.strike}" class="price-cell" style="font-weight:bold;">${row.put.ltp !== "0.00" ? fmt(row.put.ltp) : "-"}</td>
+
                     <td id="pe-bid-${row.strike}">${fmt(row.put.bid)}</td>
                     <td id="pe-ask-${row.strike}">${fmt(row.put.ask)}</td>
                     <td>
@@ -355,12 +364,26 @@ if (typeof updateBasketLTP === 'function' &&
 
         } else {
             data.forEach(row => {
+               
                 updateCell(`ce-bid-${row.strike}`, row.call.bid);
                 updateCell(`ce-ask-${row.strike}`, row.call.ask);
                 updateCell(`ce-ltp-${row.strike}`, row.call.ltp);
                 updateCell(`pe-bid-${row.strike}`, row.put.bid);
                 updateCell(`pe-ask-${row.strike}`, row.put.ask);
                 updateCell(`pe-ltp-${row.strike}`, row.put.ltp);
+                // === NEW: Send Live Price to Popup ===
+                if (window.popupManager) {
+                    // Update Call Price
+                    if (row.call.pTrdSymbol) {
+                        window.popupManager.updateLivePrice(row.call.pTrdSymbol, row.call.ltp);
+                    }
+                    // Update Put Price
+                    if (row.put.pTrdSymbol) {
+                        window.popupManager.updateLivePrice(row.put.pTrdSymbol, row.put.ltp);
+                    }
+                }
+               
+
 
                 const tr = document.getElementById(`row-${row.strike}`);
                 if (tr) {
@@ -433,6 +456,8 @@ if (typeof updateBasketLTP === 'function' &&
 
 
             const data = await response.json();
+            
+            
            if (data.success && Array.isArray(data.expiries) && data.expiries.length > 0) {
         // Show a "Select Expiry" default option
         expirySelect.innerHTML = '<option value="">Select Expiry</option>';

@@ -29,19 +29,30 @@ class TradingDashboard {
 
         this.basketOrders = [];
         // Load saved basket
-try {
-    const saved = localStorage.getItem('basketOrders');
-    if (saved) {
-        this.basketOrders = JSON.parse(saved);
-        // Ensure each item has selected property
-        this.basketOrders.forEach(item => {
-            if (item.selected === undefined) item.selected = true;
-        });
-    }
-} catch (e) {
-    console.error('Failed to load basket:', e);
-}
+        try {
+            const saved = localStorage.getItem('basketOrders');
+            if (saved) {
+                this.basketOrders = JSON.parse(saved);
+                // Ensure each item has selected property
+                this.basketOrders.forEach(item => {
+                    if (item.selected === undefined) item.selected = true;
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load basket:', e);
+        }
+        
         this.isBasketExecuting = false;
+
+        // === MARKET PROTECTION SETTING ===
+        // Loads from 'appSettings' (if your popup saves there) or defaults to 10%
+        this.marketProtectionPercent = 10; 
+        try {
+            const settings = JSON.parse(localStorage.getItem('appSettings'));
+            if (settings && settings.marketProtection) {
+                this.marketProtectionPercent = parseFloat(settings.marketProtection);
+            }
+        } catch(e) {}
 
         this.isInitialized = false;
         this.currentUser = 'ketan'; 
@@ -60,10 +71,9 @@ try {
         this.wasIdleBefore = false;
         this.lastIdleState = false;
         this.optionChain = new OptionChainManager(this, this.activityManager);
-        
 
         this.init();
-}
+    }
         trackUserActivity() {
             this.activityManager.trackUserActivity();
 
@@ -83,7 +93,7 @@ try {
         
         this.blankPortfolio();
         this.updateLoginBanner(false);
-
+        this.setupSettingsUI(); // <--- ADD THIS LINE
         // === 2. AUTO-WAKEUP (Tab Switching Fix) ===
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
@@ -369,7 +379,8 @@ if (watchlistBtn) {
         // Stop Heartbeat
         if (this.refreshTimer) clearInterval(this.refreshTimer);
         this.refreshTimer = null;
-
+        // 🔥 NEW: Stop bot data fetcher
+        if (window.botFetcher) window.botFetcher.stop();
         if (window.popupManager && typeof window.popupManager.stopOrderHistoryUpdates === 'function') {
             window.popupManager.stopOrderHistoryUpdates();
         }
@@ -440,6 +451,8 @@ if (watchlistBtn) {
 
         // Run immediately
         this.optionChain.heartbeatTick();
+         // 🔥 NEW: Start bot data fetcher
+        if (window.botFetcher) window.botFetcher.start();
 
     }
 
@@ -471,9 +484,11 @@ if (watchlistBtn) {
     const lots = parseInt(document.getElementById('headerOrderQty')?.value) || 1;
     const product = document.getElementById('productType')?.value || 'NRML';
     
+    // Inside placeOrder function...
+    
     // Get priceType from the popup (MARKET or LIMIT)
     const priceTypeEl = document.querySelector('select[name="priceType"], input[name="priceType"]');
-    const priceType = priceTypeEl?.value || 'LIMIT'; // Default to LIMIT if not found
+    const priceType = priceTypeEl?.value || 'MARKET'; // <--- CHANGED TO MARKET
 
     // Detect Segment
     const marketTypeEl = document.getElementById('marketType');
@@ -550,60 +565,142 @@ basketOrder() {
     alert('Basket items: ' + this.basketOrders.length);
 }
 addToBasket(orderDetails) {
-    this.pendingOrder = null;
+        this.pendingOrder = null;
 
-    this.basketOrders.push({
-        action: orderDetails.action,      // BUY / SELL
-        optionType: orderDetails.optionType, // CE / PE
-        strike: orderDetails.strike,
-        price: orderDetails.price,
-        symbol: orderDetails.symbol,
-        segment: orderDetails.segment || null,
-        qty: orderDetails.quantity,
-        selected: true
-    });
-    if (typeof renderBasketUI === 'function') renderBasketUI();
-    localStorage.setItem('basketOrders', JSON.stringify(this.basketOrders));
-    
-}
-clearBasket() {
+        // Save EVERYTHING, don't filter fields
+        this.basketOrders.push({
+            ...orderDetails, 
+            selected: true
+        });
+
+        // Ensure UI updates
+        if (typeof this.renderBasketUI === 'function') this.renderBasketUI();
+        localStorage.setItem('basketOrders', JSON.stringify(this.basketOrders));
+    }clearBasket() {
     this.basketOrders = [];
     
 }
 removeBasketItem(index) {
-    this.basketOrders.splice(index, 1);
-   localStorage.setItem('basketOrders', JSON.stringify(this.basketOrders));
-}
-
+        this.basketOrders.splice(index, 1); // Delete from memory
+        this.renderBasketUI();              // Redraw Table AND Save to LocalStorage
+    }
 addOrderPopupToBasket() {
-    const symbol = document.getElementById('orderSymbol').value;
-    const strike = document.getElementById('orderStrike').value;
-    const optionType = document.getElementById('orderOptionType').value;
-    
-    // 🔑 NEW FIX: SAFELY CHECK BOTH POSSIBLE QUANTITY INPUT IDS
-    const orderQtyElement = document.getElementById('orderQty') || document.getElementById('headerOrderQty');
-    const qtyLots = parseInt(orderQtyElement?.value || '1', 10);
-    
-    const priceType = document.getElementById('priceTypeSelect').value;
-    const limitPrice = parseFloat(document.getElementById('limitPrice').value) || 0;
-    const segment = this.currentSegment || 'NFO';
-    const action = document.getElementById('actionBuy').classList.contains('buy-active') ? 'BUY' : 'SELL';
+        const symbol = document.getElementById('orderSymbol').value;
+        const strike = document.getElementById('orderStrike').value;
+        const optionType = document.getElementById('orderOptionType').value;
+        
+        const orderQtyElement = document.getElementById('orderQty') || document.getElementById('headerOrderQty');
+        const qtyLots = parseInt(orderQtyElement?.value || '1', 10);
+        
+        const priceType = document.getElementById('priceTypeSelect').value;
+        const limitPrice = parseFloat(document.getElementById('limitPrice').value) || 0;
+        const triggerPrice = parseFloat(document.getElementById('triggerPrice').value) || 0;
 
-  const price = (priceType === 'MARKET') ? null : limitPrice;
-    const qty = qtyLots;  // per-lot; you can later convert to absolute if needed
+        const segment = this.currentSegment || 'NFO';
+        const action = document.getElementById('actionBuy').classList.contains('buy-active') ? 'BUY' : 'SELL';
 
-    this.addToBasket({
-        action: action, // Ensure Action is passed
-        optionType: optionType,
-        strike: strike,
-        price: price,
-        symbol: symbol,
-        segment: segment,
-        selected: true,
-        // 🔑 THE FIX: USE THE CORRECT KEY 'quantity'
-        quantity: qty 
-    });
-}
+        // Fix Price Logic
+        const price = (priceType === 'MARKET' || priceType === 'SL-M') ? 0 : limitPrice;
+        
+        const orderDetails = {
+            action, 
+            optionType, 
+            strike, 
+            price,
+            triggerPrice, 
+            priceType, 
+            symbol, 
+            segment,
+            selected: true,
+            quantity: qtyLots, // Used for display
+            qty: qtyLots,      // Keep 'qty' for backward compatibility with executeBasket
+            product: document.getElementById('orderTypeSelect').value || 'NRML'
+        };
+
+        // CHECK MODE: Update or Add?
+        const win = document.getElementById('orderEntryWindow');
+        const editIndex = win.dataset.editIndex;
+
+        if (editIndex !== undefined && editIndex !== null && editIndex !== "") {
+            // UPDATE EXISTING
+            this.basketOrders[editIndex] = orderDetails;
+            console.log(`Basket Item #${editIndex} Updated`);
+            
+            // Cleanup Edit Mode
+            delete win.dataset.editIndex;
+            const btn = document.getElementById('addToBasketBtn');
+            if (btn) {
+                btn.textContent = "Add to Basket";
+                btn.style.backgroundColor = "";
+                btn.style.color = "";
+            }
+        } else {
+            // ADD NEW (This calls our fixed addToBasket above)
+            this.addToBasket(orderDetails);
+        }
+        
+        if (typeof this.renderBasketUI === 'function') this.renderBasketUI();
+        if (window.popupManager) window.popupManager.hideWindow('orderEntryWindow');
+    }    // === 1. EDIT BASKET ITEM ===
+    editBasketItem(index) {
+        const item = this.basketOrders[index];
+        if (!item) return;
+
+        // Open the existing popup with this item's data
+        if (window.popupManager) {
+            window.popupManager.openOrderEntry(item);
+            
+            // ENABLE EDIT MODE: Tag the window with the index we are editing
+            const win = document.getElementById('orderEntryWindow');
+            win.dataset.editIndex = index;
+            
+            // VISUAL CUE: Change button text
+            const btn = document.getElementById('addToBasketBtn');
+            if (btn) {
+                btn.textContent = "Update Basket";
+                btn.style.backgroundColor = "#ffc107"; // Yellow/Orange warning color
+                btn.style.color = "#000";
+            }
+        }
+    }
+
+    // === 2. RENDER BASKET UI (The Missing Piece) ===
+    renderBasketUI() {
+        const tbody = document.getElementById('basketData'); // Ensure your HTML has this ID in the basket table
+        if (!tbody) return;
+
+        tbody.innerHTML = this.basketOrders.map((item, index) => {
+            const isBuy = item.action === 'BUY';
+            const colorClass = isBuy ? 'text-success' : 'text-danger';
+            
+            return `
+                <tr class="basket-row">
+                    <td><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="dashboard.toggleBasketItem(${index})"></td>
+                    <td class="${colorClass} fw-bold">${item.action}</td>
+                    <td>${item.symbol}</td>
+                    <td>${item.product}</td>
+                    <td>${item.priceType}</td>
+                    <td>${item.quantity}</td>
+                    <td>${item.price || 'MKT'}</td>
+                    <td>${item.triggerPrice || '-'}</td>
+                    <td>
+                        <button class="btn-sm btn-edit" onclick="dashboard.editBasketItem(${index})">✏️</button>
+                        <button class="btn-sm btn-delete" onclick="dashboard.removeBasketItem(${index})">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Save to storage whenever we render
+        localStorage.setItem('basketOrders', JSON.stringify(this.basketOrders));
+    }
+    
+    toggleBasketItem(index) {
+        if(this.basketOrders[index]) {
+            this.basketOrders[index].selected = !this.basketOrders[index].selected;
+            this.renderBasketUI();
+        }
+    }
 
 // --- START of executeBasket() in dashboard.js ---
 
@@ -681,9 +778,11 @@ async executeBasket() {
                     quantity: (parseInt(item.qty) || 1) * lotSize,
 
                     product: 'NRML',
-                    priceType: item.price ? 'LIMIT' : 'MARKET',
+                    // === NEW: Pass the correct Type and Trigger from Basket Item ===
+                    priceType: item.priceType || (item.price ? 'LIMIT' : 'MARKET'), 
+                    triggerPrice: item.triggerPrice || 0,
+                    
                     segment: item.segment,
-
                 };
                 
                 // Create tracker order
@@ -710,6 +809,8 @@ async executeBasket() {
         this.isBasketExecuting = false;
         console.log("Basket execution finished. Lock released.");
     }
+     
+
 }
 // --- END of executeBasket() in dashboard.js ---   
 
@@ -719,21 +820,84 @@ async executeBasket() {
         if (pnlElement) pnlElement.innerHTML = '';
     }
 
-    placeConfirmedOrder(orderDetails, orderId) {  // ← ADDED orderId parameter
+   placeConfirmedOrder(orderDetails, orderId) {
     console.log("🔄 Placing order:", orderDetails);
-    console.log("🔍 DATA INSPECTOR - Sending Order Details:", orderDetails);
-    // Disable buttons briefly to prevent double clicks
+    
+    // Disable buttons briefly
     const buttons = document.querySelectorAll('.buy-btn, .sell-btn');
     buttons.forEach(btn => btn.disabled = true);
     
     showOrderLoading(true, `Placing ${orderDetails.action} order...`);
 
-    // === NEW: Get orderType from details ===
-    const isMarket = orderDetails.priceType === 'MARKET' || orderDetails.order_type === 'MKT';
-    const finalPrice = isMarket ? '0' : orderDetails.price.toString();
-    const finalOrderType = isMarket ? 'MKT' : 'L';
+    let finalOrderType = 'L'; // Default to Limit
+    let finalPrice = parseFloat(orderDetails.price) || 0;
+    let finalTriggerPrice = parseFloat(orderDetails.triggerPrice) || 0;
 
-    // FIX: Use the segment passed from placeOrder, or fallback to dropdown
+    // === 🛡️ MARKET PROTECTION SYSTEM ===
+    // If user selects MARKET, we convert it to a Safe LIMIT order
+    if (orderDetails.priceType === 'MARKET') {
+        
+        // 1. Get Live LTP (Try Data first, then fallback to passed price)
+        let liveLtp = 0;
+        if (window.optionChainData) {
+            const item = window.optionChainData.find(row => 
+                row.symbol === orderDetails.symbol
+            );
+            if (item) {
+                // Use Call or Put LTP based on option type
+                liveLtp = parseFloat(item.ltp) || 0;
+            }
+        }
+        // Fallback if data search failed
+        if (liveLtp === 0 && orderDetails.price > 0) {
+            liveLtp = orderDetails.price;
+        }
+
+        if (liveLtp > 0) {
+            // 2. Calculate Safety Buffer
+            const bufferPercent = this.marketProtectionPercent || 5; // Default 5%
+            const buffer = liveLtp * (bufferPercent / 100);
+            
+            if (orderDetails.action === 'BUY') {
+                // BUY: Cap price at LTP + Buffer (e.g., 100 + 5 = 105)
+                // You get filled at best price (100), but never pay more than 105.
+                finalPrice = liveLtp + buffer;
+                finalPrice = Math.round(finalPrice / 0.05) * 0.05; // Tick size
+                console.log(`🛡️ Shield Active: BUY Market converted to Limit @ ${finalPrice} (LTP ${liveLtp})`);
+            } else {
+                // SELL: Floor price at LTP - Buffer (e.g., 100 - 5 = 95)
+                finalPrice = liveLtp - buffer;
+                finalPrice = Math.round(finalPrice / 0.05) * 0.05;
+                if (finalPrice < 0.05) finalPrice = 0.05;
+                console.log(`🛡️ Shield Active: SELL Market converted to Limit @ ${finalPrice} (LTP ${liveLtp})`);
+            }
+
+            // 3. FORCE ORDER TYPE TO LIMIT
+            finalOrderType = 'L'; 
+            
+        } else {
+            // If we have ZERO price info, we must send as MKT (High Risk, but fallback)
+            console.warn("⚠️ Market Protection Skipped: No LTP found.");
+            finalOrderType = 'MKT';
+            finalPrice = 0;
+        }
+    } 
+    else if (orderDetails.priceType === 'SL') {
+        finalOrderType = 'SL';
+        // Price and Trigger stay as defined by user
+    }
+    else if (orderDetails.priceType === 'SL-M') {
+        finalOrderType = 'SL-M';
+        finalPrice = 0;
+        // Note: Since SL-M is forbidden on some segments, consider using SL-Limit instead.
+    }
+    
+    // Final sanity check
+    if (orderDetails.priceType === 'LIMIT') {
+        finalOrderType = 'L';
+        finalPrice = orderDetails.price;
+    }
+
     const finalSegment = orderDetails.segment || document.getElementById('marketType')?.value || 'NFO';
 
     const orderData = {
@@ -741,18 +905,20 @@ async executeBasket() {
         transaction_type: orderDetails.action === 'BUY' ? 'B' : 'S',
         quantity: orderDetails.quantity,
         product_code: orderDetails.product || 'NRML',
-        price: finalPrice,
+        price: finalPrice.toFixed(2),
         order_type: finalOrderType,
+        trigger_price: finalTriggerPrice.toString(),
         validity: 'DAY',
         am_flag: 'NO',
-        segment: finalSegment // <--- SENDING CORRECT SEGMENT TO PYTHON
+        segment: finalSegment
     };
 
-    // === NEW: Update tracker to SENT state (if not already) ===
+    // Update Tracker
     if (window.OrderTracker && orderId) {
         window.OrderTracker.updateState(orderId, 'SENT');
     }
 
+    // Send to Backend
     fetch('/api/place-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -760,7 +926,6 @@ async executeBasket() {
     })
     .then(response => response.json())
     .then(data => {
-        // === NEW: UPDATE PIZZA TRACKER ===
         if (window.OrderTracker && orderId) {
             if (data.success) {
                 window.OrderTracker.updateState(orderId, 'CONFIRMED', {
@@ -768,9 +933,6 @@ async executeBasket() {
                     brokerOrderId: data.order_id
                 });
                 showOrderLoading(false, `✅ Order Placed! #${data.order_number}`);
-                
-                // Note: We'll update to FILLED when order actually fills
-                // (This usually comes from order history updates)
             } else {
                 window.OrderTracker.updateState(orderId, 'REJECTED', {
                     error: data.message,
@@ -779,7 +941,6 @@ async executeBasket() {
                 showOrderLoading(false, `❌ Failed: ${data.message}`);
             }
         } else {
-            // Fallback if no tracker
             if (data.success) {
                 showOrderLoading(false, `✅ Order Placed! #${data.order_number}`);
             } else {
@@ -789,23 +950,17 @@ async executeBasket() {
         
         // Refresh Windows
         if (window.popupManager) {
-            if (typeof window.popupManager.refreshOrderHistory === 'function') {
-                setTimeout(() => window.popupManager.refreshOrderHistory(), 1000);
-            }
-            if (typeof window.popupManager.refreshPortfolio === 'function') {
-                setTimeout(() => window.popupManager.refreshPortfolio(), 1500);
-            }
+            if (typeof window.popupManager.refreshOrderHistory === 'function') setTimeout(() => window.popupManager.refreshOrderHistory(), 1000);
+            if (typeof window.popupManager.refreshPortfolio === 'function') setTimeout(() => window.popupManager.refreshPortfolio(), 1500);
         }
     })
     .catch(error => {
-        // === NEW: UPDATE TRACKER ON NETWORK ERROR ===
         if (window.OrderTracker && orderId) {
             window.OrderTracker.updateState(orderId, 'REJECTED', {
                 error: error.message,
                 type: 'network_error'
             });
         }
-        
         console.error('❌ Order Error:', error);
         showOrderLoading(false, '❌ Network Error');
     })
@@ -815,8 +970,7 @@ async executeBasket() {
             buttons.forEach(btn => btn.disabled = false);
         }, 2000);
     });
-}
-
+} 
 
   
     showOrderHistory() {
@@ -833,7 +987,7 @@ async executeBasket() {
             console.error('PopupManager not available for portfolio');
         }
     }
-            showIndexPrices() {
+           showIndexPrices() {
         if (window.popupManager && typeof window.popupManager.showWindow === 'function') {
             window.popupManager.showWindow('indexPricesWindow');
             // Start the price updates
@@ -842,7 +996,62 @@ async executeBasket() {
             }
         }
     }
-}
+
+    // 👇 PASTE NEW CODE HERE (INSIDE THE CLASS) 👇
+    setupSettingsUI() {
+        const slider = document.getElementById('marketProtectionSlider');
+        const display = document.getElementById('marketProtectionValue');
+        const applyBtn = document.getElementById('applySettingsBtn');
+        const resetBtn = document.getElementById('resetSettingsBtn');
+
+        if (!slider || !applyBtn) return;
+
+        // 1. LOAD: Set slider to current value on open
+        slider.value = this.marketProtectionPercent;
+        display.textContent = this.marketProtectionPercent + "%";
+
+        // 2. LIVE UPDATE: Update text as you drag
+        slider.addEventListener('input', (e) => {
+            display.textContent = e.target.value + "%";
+        });
+
+        // 3. SAVE: When "Apply Changes" is clicked
+        applyBtn.addEventListener('click', () => {
+            const newValue = parseFloat(slider.value);
+            this.marketProtectionPercent = newValue;
+
+            // Update Storage (Preserve other settings)
+            let currentSettings = {};
+            try {
+                currentSettings = JSON.parse(localStorage.getItem('appSettings')) || {};
+            } catch(e) {}
+
+            currentSettings.marketProtection = newValue;
+            localStorage.setItem('appSettings', JSON.stringify(currentSettings));
+            
+            // Visual Feedback
+            const originalText = applyBtn.textContent;
+            applyBtn.textContent = "✅ Saved!";
+            setTimeout(() => applyBtn.textContent = originalText, 1000);
+            console.log(`🛡️ Market Protection updated to ${newValue}%`);
+        });
+
+        // 4. RESET: When "Reset" is clicked
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                slider.value = 10;
+                display.textContent = "10%";
+                this.marketProtectionPercent = 10;
+                
+                let s = JSON.parse(localStorage.getItem('appSettings')) || {};
+                s.marketProtection = 10;
+                localStorage.setItem('appSettings', JSON.stringify(s));
+            });
+        }
+    }
+    // 👆 END OF NEW CODE 👆
+
+} // <---- CLASS ENDS HERE
 function getDashboard() { 
     return window.dashboard; 
 }
@@ -855,7 +1064,68 @@ function showIndexPricesWindow() {
 
 
 
+// ======================================================
+// SIMPLE BOT DATA FETCHER (CLEAN & SIMPLE)
+// ======================================================
+class SimpleBotFetcher {
+    constructor() {
+        this.timer = null;
+        this.niftyExpiry = null;
+    }
+    
+    async start() {
+        console.log("🤖 Starting Simple Bot Fetcher...");
+        await this.getNearestExpiry();
+        
+        if (this.niftyExpiry) {
+            // Fetch every 2 seconds (faster updates for bot)
+            this.timer = setInterval(() => {
+                this.fetchNiftyForBot();
+            }, 2000); 
+            
+            // Fetch immediately once
+            this.fetchNiftyForBot();
+        } else {
+            console.log("🤖 Could not get expiry, retrying in 5s");
+            setTimeout(() => this.start(), 5000);
+        }
+    }
+    
+    stop() {
+        if (this.timer) clearInterval(this.timer);
+        console.log("🤖 Bot Fetcher Stopped");
+    }
+    
+    async getNearestExpiry() {
+        try {
+            const response = await fetch('/api/expiries-v2?index=NIFTY&segment=NFO');
+            const data = await response.json();
+            
+            if (data.success && data.expiries && data.expiries.length > 0) {
+                // 🧠 SIMPLE LOGIC: The backend already sorts by date.
+                // The first item is ALWAYS the nearest/current expiry.
+                this.niftyExpiry = data.expiries[0];
+                console.log(`🤖 Bot locked on Current Expiry: ${this.niftyExpiry}`);
+            }
+        } catch (error) {
+            console.log("🤖 Failed to get expiry:", error);
+        }
+    }
+    
+    async fetchNiftyForBot() {
+        if (!this.niftyExpiry) return;
+        
+        try {
+            // Fetch strikes=20 to give bot enough data
+            const url = `/api/option-chain?index=NIFTY&expiry=${encodeURIComponent(this.niftyExpiry)}&strikes=20&segment=NFO`;
+            await fetch(url);
+        } catch (error) {
+            // Ignore errors silently
+        }
+    }
+}
 
+window.botFetcher = new SimpleBotFetcher();
 
 
 

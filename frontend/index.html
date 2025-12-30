@@ -5,283 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kotak Options Trader</title>
     <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./inline-styles.css">
+
     <link rel="stylesheet" href="./popup-styles.css">
-    <style>
-         /* Dark Mode Colors */
-:root {
-    --bg-color: #ffffff;
-    --text-color: #2c3e50;
-    --table-bg: #ffffff;
-    --header-bg: #2c3e50;
-    --border-color: #ddd;
-    --row-hover: #f5f5f5;
-}
-
-[data-theme="dark"] {
-    --bg-color: #1a1a1a;
-    --text-color: #e0e0e0;
-    --table-bg: #2d2d2d;
-    --header-bg: #1a1a1a;
-    --border-color: #444;
-    --row-hover: #333;
-}
-
-body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-}
-
-.container {
-    background-color: var(--bg-color);
-}
-
-table {
-    background-color: var(--table-bg);
-    color: var(--text-color);
-}
-
-table th {
-    background-color: var(--header-bg) !important;
-    color: white !important;
-}
-
-table tr:hover {
-    background-color: var(--row-hover);
-}
-
-.popup-window {
-    background-color: var(--table-bg);
-    border-color: var(--border-color);
-}
-        /* === 1. POPUP WINDOW BASICS === */
-        .popup-window {
-            display: none;
-            position: fixed;
-            width: 450px;
-            height: 500px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            border: 1px solid #ddd;
-            z-index: 1000;
-            resize: both;
-            overflow: hidden;
-            min-width: 350px;
-            min-height: 300px;
-            max-width: 90vw;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-        }
-           #indexPricesWindow {
-           min-height: 150px;
-        }
- 
-
-        .window-header {
-            background: #2c3e50;
-            color: white;
-            padding: 12px 15px;
-            cursor: move;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            user-select: none;
-            border-radius: 8px 8px 0 0;
-            flex-shrink: 0;
-        }
-
-        .window-content {
-            padding: 15px;
-            padding-bottom: 40px;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        /* === 2. SCROLLABLE TABLE AREA === */
-        .table-scroll-wrapper {
-            flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            border: 1px solid #eee;
-            position: relative;
-        }
-
-        /* === 3. TABLE STYLES (HEADERS FIX) === */
-        #orderHistoryWindow .orders-table,
-        #portfolioWindow .portfolio-table {
-            table-layout: fixed;
-            width: 100%;
-            border-collapse: separate; 
-            border-spacing: 0;
-        }
-
-        #orderHistoryWindow .orders-table th,
-        #orderHistoryWindow .orders-table td,
-        #portfolioWindow .portfolio-table th,
-        #portfolioWindow .portfolio-table td {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            padding: 6px 8px;
-            border-bottom: 1px solid #eee;
-            text-align: center; /* Center align all cells */
-        }
-
-        /* STICKY DARK HEADERS */
-        #orderHistoryWindow .orders-table th,
-        #watchlistWindow table th,
-        #portfolioWindow .portfolio-table th {
-            background-color: #2c3e50 !important; /* Force Dark Blue */
-            color: white !important;
-            font-weight: 600;
-            border-right: 1px solid rgba(255, 255, 255, 0.3);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        #orderHistoryWindow .orders-table th:last-child,
-        #portfolioWindow .portfolio-table th:last-child {
-            border-right: none;
-        }
-
-        /* Order ID Column */
-        td[data-column="order_id"] {
-            font-size: 11px;
-            color: #7f8c8d;
-            font-family: monospace;
-        }
-
-        /* Checkbox Column Fix */
-        #portfolioWindow .portfolio-table th:first-child,
-        #portfolioWindow .portfolio-table td:first-child {
-            width: 30px;
-            padding: 0;
-        }
-
-        /* === 4. BUTTON STYLES (RESTORE COLORS) === */
-        .btn-primary {
-            background-color: #3498db;
-            color: white;
-            border: 1px solid #2980b9;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .btn-primary:hover { background-color: #2980b9; }
-
-        .btn-secondary {
-            background-color: #95a5a6;
-            color: white;
-            border: 1px solid #7f8c8d;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .btn-secondary:hover { background-color: #7f8c8d; }
-
-        .btn-cancel {
-            background-color: #e74c3c;
-            color: white;
-            border: 1px solid #c0392b;
-            padding: 4px 8px;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        /* === 5. BUY/SELL ACTIVE STATES (THE NEW FIX) === */
-        .action-btn {
-            padding: 10px;
-            border: 1px solid #bdc3c7;
-            background: #f0f0f0;
-            cursor: pointer;
-            font-weight: bold;
-            flex: 1;
-            transition: all 0.2s;
-            opacity: 0.6;
-        }
-        
-        /* Force Green for Buy */
-        .buy-active {
-            background-color: #27ae60 !important;
-            color: white !important;
-            border-color: #219150 !important;
-            opacity: 1;
-        }
-        
-        /* Force Red for Sell */
-        .sell-active {
-            background-color: #e74c3c !important;
-            color: white !important;
-            border-color: #c0392b !important;
-            opacity: 1;
-        }
-
-        /* === 6. UTILS === */
-        .resize-handle {
-            position: absolute;
-            top: 0; right: 0; width: 5px; height: 100%;
-            cursor: col-resize; z-index: 20;
-            background: rgba(0,0,0,0.1);
-        }
-        .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
-        .form-group { flex: 1; display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-        .form-input, .form-select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
-        .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .order-summary { background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
-        .summary-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
-        .form-buttons { display: flex; justify-content: flex-end; gap: 10px; }
-        
-        /* Loading/Empty States */
-        .qty-help { font-size: 11px; color: #7f8c8d; margin-top: 2px; }
-         /* === Basket Delete column fix === */
-#basketWindow th.delete-col,
-#basketWindow td.delete-col {
-    width: 40px;
-    min-width: 40px;
-    max-width: 40px;
-    text-align: center;
-}
-
-#basketWindow td.delete-col button {
-    width: 22px;
-    height: 22px;
-    line-height: 20px;
-    padding: 0;
-    font-size: 14px;
-}
-/* Force fixed layout for Basket table */
-#basketWindow table {
-    table-layout: fixed;
-    width: 100%;
-}
-
-
-     /* === PORTFOLIO GROUP HEADERS === */
-        .group-header {
-            background-color: #dfe6e9; /* Light Gray */
-            color: #2d3436;
-            font-weight: bold;
-            font-size: 13px;
-        }
-        .group-header td {
-            text-align: left !important; /* Align text to the left */
-            padding: 8px 15px !important;
-            border-bottom: 1px solid #b2bec3 !important;
-            border-top: 1px solid #b2bec3;
-        }
-        /* Fix alignment for the group P&L span */
-        .group-pnl-display {
-            float: right;
-            margin-right: 20px;
-        }
-                   
-
-    </style>
-    </head>
+        </head>
 <body>
     <div class="container">
         <header>
@@ -350,7 +77,10 @@ table tr:hover {
 <select id="userSelect" style="padding: 6px 10px; font-size: 13px; border: 1px solid #bdc3c7; border-radius: 4px;">
     <option value="ketan">👤 Ketan</option>
     <option value="kavita">👤 Kavita</option>
-</select>            </div>
+</select> 
+
+
+           </div>
         </header>
                
        
@@ -383,7 +113,7 @@ table tr:hover {
          <div class="resize-handle"></div>
     </div>
 
-    <div id="portfolioWindow" class="popup-window" style="width: 800px; min-width: 750px; height: 500px;">
+   <div id="portfolioWindow" class="popup-window" style="width: 800px; min-width: 750px; height: 500px;">
         <div class="window-header">
             <div class="window-title">💼 Portfolio P&L (Live F&O Positions)
     <span class="status-badge popup-user-status">Demo Mode</span>
@@ -463,6 +193,8 @@ table tr:hover {
             </div>
         <div class="resize-handle"></div>
     </div>
+
+
 
     <div id="orderHistoryWindow" class="popup-window" style="width: 800px; height: 500px;">
         <div class="window-header">
@@ -547,6 +279,7 @@ table tr:hover {
         <div class="window-header">
             <div class="window-title">📝 Place Order
     <span class="status-badge popup-user-status">Demo Mode</span>
+    <span id="popupLiveLtp" style="margin-left: 10px; background: #28a745; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.9em;">LTP: Loading...</span>
 </div>
             <div class="window-controls">
                 <button class="minimize-btn" title="Minimize">-</button>
@@ -560,7 +293,7 @@ table tr:hover {
                     <input type="text" id="orderSymbol" class="form-input" readonly>
                 </div>
                 
-                <div class="form-row">
+               <div class="form-row">
                     <div class="form-group">
                         <label>Strike</label>
                         <input type="text" id="orderStrike" class="form-input" readonly>
@@ -595,14 +328,23 @@ table tr:hover {
                         <select id="priceTypeSelect" class="form-select">
                             <option value="MARKET">MARKET</option>
                             <option value="LIMIT">LIMIT</option>
+                            <option value="SL">SL (Stop Limit)</option>
+                            <option value="SL-M">SL-M (Stop Market)</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="form-group" id="triggerPriceGroup" style="display: none;">
+                    <label>Trigger Price</label>
+                    <input type="number" id="triggerPrice" class="form-input" step="0.05" value="0">
                 </div>
 
                 <div class="form-group" id="limitPriceGroup" style="display: none;">
                     <label>Limit Price</label>
                     <input type="number" id="limitPrice" class="form-input" step="0.05" value="0">
                 </div>
+              
+
 
                 <div class="order-summary">
                     <div class="summary-row">
@@ -629,8 +371,8 @@ table tr:hover {
     <div id="settingsWindow" class="popup-window">
         <div class="window-header">
             <div class="window-title">⚙️ Popup Settings
-    <span class="status-badge popup-user-status">Demo Mode</span>
-</div>
+                <span class="status-badge popup-user-status">Demo Mode</span>
+            </div>
             <div class="window-controls">
                 <button class="minimize-btn" title="Minimize">-</button>
                 <button class="close-btn" title="Close">×</button>
@@ -653,7 +395,17 @@ table tr:hover {
                     <label>Header Color</label>
                     <input type="color" id="headerColorPicker" value="#34495e" class="form-color">
                 </div>
-                
+
+                <div class="form-group" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+                    <label title="Buffer added to Market Orders to prevent execution at bad prices">🛡️ Market Protection</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="range" id="marketProtectionSlider" min="0" max="50" value="10" class="form-slider" style="flex-grow: 1;">
+                        <span id="marketProtectionValue" style="min-width: 45px; text-align: right; font-weight: bold;">10%</span>
+                    </div>
+                    <small style="color: #7f8c8d; font-size: 0.8em; display: block; margin-top: 4px;">
+                        Safety buffer for Market Orders (0% = Risky, 10% = Safe)
+                    </small>
+                </div>
                 <div class="form-buttons">
                     <button id="resetSettingsBtn" class="btn-secondary">Reset to Default</button>
                     <button id="applySettingsBtn" class="btn-primary">Apply Changes</button>
@@ -1290,20 +1042,21 @@ function renderBasketUI() {
     <col style="width:40px">   <!-- delete -->
 </colgroup>
 
-            <thead>
-                <th class="resizable" style="width:30px;"><input type="checkbox"     id="selectAllBasket" ${allSelected ? 'checked' : ''}   onchange="toggleAllBasketItems(this.checked)"></th>
-               <th class="resizable">Symbol</th>
-               <th class="resizable">Strike</th>
-               <th class="resizable">Type</th>
-               <th class="resizable">Action</th>
-               <th class="resizable">Lots</th>
-               <th class="resizable">LTP</th>
-               <th class="resizable">Price</th>
-               <th class="resizable delete-col" style="width:40px; min-width:40px;">Del</th>
-
-                </tr>
+           <thead>
+                <tr>
+                    <th class="resizable" style="width:30px;">
+                        <input type="checkbox" id="selectAllBasket">
+                    </th>
+                    <th class="resizable">Action</th>
+                    <th class="resizable">Symbol</th>
+                    <th class="resizable">Product</th>
+                    <th class="resizable">Type</th>
+                    <th class="resizable">Qty</th>
+                    <th class="resizable">Price</th>
+                    <th class="resizable">Trigger</th>
+                    <th class="resizable" style="width:80px;">Manage</th> </tr>
             </thead>
-            <tbody>
+            <tbody id="basketData">
                 ${items.map((item, i) => `
                     <tr style="border-bottom:1px solid #eee;">
                         <td><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="window.dashboard.basketOrders[${i}].selected = this.checked"></td>
@@ -1527,6 +1280,9 @@ if (savedTheme === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
     document.getElementById('darkModeToggle').textContent = '☀️';
 }
+
+
+
 </script>
 
 </body>
