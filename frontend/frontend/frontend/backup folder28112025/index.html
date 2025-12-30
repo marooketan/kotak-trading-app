@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kotak Options Trader</title>
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./popup-styles.css">
+    <style>
+        /* Additional styles for the merged popups */
+        .popup-window {
+            display: none;
+            position: fixed;
+            width: 450px;
+            height: 500px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid #ddd;
+            z-index: 1000;
+            resize: both;
+            overflow: hidden;
+            min-width: 350px;
+            min-height: 300px;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+
+        .window-header {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 15px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .window-content {
+            padding: 15px;
+            height: calc(100% - 50px);
+            overflow-y: auto;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Kotak Options Trader</h1>
+            <div class="controls">
+                <button id="toggleMode">One-Click: OFF</button>
+                
+                <div class="filter-group">
+                    <select id="marketType">
+                        <option value="NFO">NFO</option>
+                        <option value="BFO">BFO</option>
+                    </select>
+                    
+                    <select id="indexSelect">
+                        <option value="NIFTY">NIFTY</option>
+                        <option value="BANKNIFTY">BANKNIFTY</option>
+                        <option value="FINNIFTY">FINNIFTY</option>
+                        <option value="MIDCPNIFTY">MIDCPNIFTY</option>
+                    </select>
+                    
+                    <select id="expirySelect">
+                        <option value="">Loading expiries...</option>
+                    </select>
+                    
+                    <select id="strikeCount">
+                        <option value="10">10 Strikes</option>
+                        <option value="25" selected>25 Strikes</option>
+                        <option value="all">All Strikes</option>
+                    </select>
+                </div>
+                
+                <select id="productType">
+                    <option value="NRML">NRML</option>
+                    <option value="MIS">MIS</option>
+                    <option value="CNC">CNC</option>
+                </select>
+                
+                <input type="number" id="headerOrderQty" value="1" min="1">
+                <button id="refreshBtn">🔄 Refresh</button>
+                <button onclick="showPortfolioWindow()">📊 Portfolio</button>
+                <button onclick="showOrderHistoryWindow()">📋 Orders</button>
+                <button onclick="showIndexPricesWindow()">🧮 Indices</button>
+                <button onclick="showSettingsWindow()">⚙️ Settings</button>
+            </div>
+        </header>
+
+        <!-- Login Section -->
+        <div class="login-section">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #2c3e50;">🔐 Kotak Secure Login</h3>
+                <button id="hideLoginBtn" style="padding: 5px 10px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer;">Hide</button>
+            </div>
+            
+            <div id="step1Form" style="margin-top: 15px;">
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="text" id="totpInput" placeholder="6-digit TOTP" 
+                           style="padding: 10px; border: 2px solid #bdc3c7; border-radius: 6px; width: 120px;" 
+                           maxlength="6">
+                    <button id="nextBtn" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Login Securely</button>
+                </div>
+                <div id="loginStatus" style="font-size: 14px; color: #7f8c8d; min-height: 20px;">
+                    💡 Enter TOTP from Authenticator
+                </div>
+            </div>
+
+            <div id="logoutSection" style="display: none; background: #e8f5e8; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                <span style="color: #27ae60; font-weight: bold;">✅ Connected to Kotak</span>
+                <button id="logoutBtn" style="margin-left: 15px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Logout</button>
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div class="dashboard">
+            <div class="pnl-section">
+                <h3>Portfolio P&L <span id="kotakStatus" style="font-size: 14px; color: #e74c3c;">(Demo Mode)</span></h3>
+                <div id="pnlDisplay">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Option Chain -->
+        <div class="option-chain">
+            <h2>Option Chain</h2>
+            <div id="loading">Loading option chain...</div>
+            <table id="optionTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Strike</th>
+                        <th>Call Bid</th>
+                        <th>Call Ask</th>
+                        <th>Call LTP</th>
+                        <th>Buy/Sell CE</th>
+                        <th>Put Bid</th>
+                        <th>Put Ask</th>
+                        <th>Put LTP</th>
+                        <th>Buy/Sell PE</th>
+                    </tr>
+                </thead>
+                <tbody id="optionData">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="orders-section">
+            <h3>Open Orders</h3>
+            <div id="ordersDisplay">No open orders</div>
+        </div>
+    </div>
+
+    <!-- ========== POPUP WINDOWS - CORRECTED STRUCTURE ========== -->
+
+    <!-- Portfolio Window -->
+    <div id="portfolioWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">💼 Portfolio</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="portfolio-summary">
+                <div class="summary-item">
+                    <span class="label">Total P&L:</span>
+                    <span id="totalPnl" class="value positive">+₹0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Day P&L:</span>
+                    <span id="dayPnl" class="value positive">+₹0.00</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Margin Used:</span>
+                    <span id="marginUsed" class="value">₹0.00</span>
+                </div>
+            </div>
+            <table class="portfolio-table">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Qty</th>
+                        <th>Avg Price</th>
+                        <th>LTP</th>
+                        <th>P&L</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="portfolioTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                            No positions
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Order History Window -->
+    <div id="orderHistoryWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📋 Order History</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="all">All</button>
+                <button class="filter-tab" data-filter="completed">Completed</button>
+                <button class="filter-tab" data-filter="pending">Pending</button>
+                <button class="filter-tab" data-filter="cancelled">Cancelled</button>
+                <button class="refresh-orders" title="Refresh Orders">🔄 Refresh</button>
+            </div>
+            <table class="orders-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                            Loading orders...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Index Prices Window -->
+    <div id="indexPricesWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📊 Indices</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="index-prices-container">
+                <div class="index-item">
+                    <strong>NIFTY 50:</strong>
+                    <span id="popupNiftyPrice" class="index-price">-</span>
+                </div>
+                <div class="index-item">
+                    <strong>BANK NIFTY:</strong>
+                    <span id="popupBankniftyPrice" class="index-price">-</span>
+                </div>
+                <div class="index-item">
+                    <strong>SENSEX:</strong>
+                    <span id="popupSensexPrice" class="index-price">-</span>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Order Entry Window -->
+    <div id="orderEntryWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">📝 Place Order</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="order-form">
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <input type="text" id="orderSymbol" class="form-input" readonly>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Strike</label>
+                        <input type="text" id="orderStrike" class="form-input" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <input type="text" id="orderOptionType" class="form-input" readonly>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="actionBuy" class="action-btn buy-active">BUY</button>
+                    <button id="actionSell" class="action-btn">SELL</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Quantity (Lots)</label>
+                    <input type="number" id="orderQty" class="form-input" value="1" min="1">
+                    <div class="qty-help">🔄 Fetching lot size...</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select id="orderTypeSelect" class="form-select">
+                            <option value="NRML">NRML</option>
+                            <option value="MIS">MIS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price Type</label>
+                        <select id="priceTypeSelect" class="form-select">
+                            <option value="MARKET">MARKET</option>
+                            <option value="LIMIT">LIMIT</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" id="limitPriceGroup" style="display: none;">
+                    <label>Limit Price</label>
+                    <input type="number" id="limitPrice" class="form-input" step="0.05" value="0">
+                </div>
+
+                <div class="order-summary">
+                    <div class="summary-row">
+                        <span>Total Quantity:</span>
+                        <span id="totalQty">50</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Estimated Amount:</span>
+                        <span id="estimatedAmount">₹0.00</span>
+                    </div>
+                </div>
+
+                <div class="form-buttons">
+                    <button id="cancelOrderBtn" class="btn-secondary">Cancel</button>
+                    <button id="submitOrderBtn" class="btn-primary">Place Order</button>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- Settings Window -->
+    <div id="settingsWindow" class="popup-window">
+        <div class="window-header">
+            <div class="window-title">⚙️ Popup Settings</div>
+            <div class="window-controls">
+                <button class="minimize-btn" title="Minimize">-</button>
+                <button class="close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="window-content">
+            <div class="settings-form">
+                <div class="form-group">
+                    <label>Font Size</label>
+                    <input type="range" id="fontSizeSlider" min="10" max="20" value="14" class="form-slider">
+                    <span id="fontSizeValue">14px</span>
+                </div>
+                
+                <div class="form-group">
+                    <label>Font Color</label>
+                    <input type="color" id="fontColorPicker" value="#2c3e50" class="form-color">
+                </div>
+                
+                <div class="form-group">
+                    <label>Header Color</label>
+                    <input type="color" id="headerColorPicker" value="#34495e" class="form-color">
+                </div>
+                
+                <div class="form-buttons">
+                    <button id="resetSettingsBtn" class="btn-secondary">Reset to Default</button>
+                    <button id="applySettingsBtn" class="btn-primary">Apply Changes</button>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle"></div>
+    </div>
+
+    <!-- ========== JAVASCRIPT FILES ========== -->
+    <script src="./dashboard.js"></script>
+    <script src="./popup-script.js"></script>
+    
+    <script>
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize dashboard
+            window.dashboard = new TradingDashboard();
+            
+            // Initialize popup manager
+            if (!window.popupManager) {
+                window.popupManager = new PopupManager();
+                window.popupManager.init();
+            }
+            
+            console.log('✅ Trading Dashboard initialized successfully');
+        });
+    </script>
+</body>
+</html>
