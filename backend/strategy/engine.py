@@ -7,6 +7,7 @@ from strategy.state import StrategyState
 from database.memory_helper import TradeMemory
 from strategy.oi_tracker import OITracker
 from watchdog.observers import Observer
+from market_state import market_state
 import importlib
 from watchdog.events import FileSystemEventHandler
 import json
@@ -276,16 +277,24 @@ class StrategyEngine:
         if config.USE_DEMO_DATA:
             chain = demo.get_chain()
         else:
-            expiries = self.api.get_expiries("NIFTY", "NFO")
-            if not expiries:
+        # SAFE: Get data from Memory Box instead of Kotak API
+            try:
+                chain_data = market_state.get_option_chain("NIFTY")
+                if chain_data:
+                    age = chain_data.get("age", 999)  # Get age
+                    if age > 10:  # If data older than 10 seconds
+                        self.log_message(f"⚠️ Stale data for active trades ({age:.1f}s)")
+                        return  # Skip update
+                    chain = chain_data["chain"]
+                else:
+                    chain = []               
+
+
+            except Exception as e:
+                self.log_message(f"⚠️ Memory Box error: {e}")
                 return
-            data = self.api.get_option_chain("NIFTY", expiries[config.EXPIRY_OFFSET])
-            if not data or not data.get("success"):
-                return
-            chain = data.get("data", [])
-            if not chain:
-                self.log_message("⚠️ Chain is empty, skipping updates")
-                return
+    
+            
 
         # === FAST BUFFER TIMER CHECKS (every 2 seconds) ===
         if self.buffer_timers and chain:
@@ -431,50 +440,63 @@ class StrategyEngine:
             bot_indices = getattr(config, "BOT_TRADED_INDICES", ["NIFTY"])
             bot_index = bot_indices[0] if bot_indices else "NIFTY"
             
-            # Get data for the index bot trades
-            response = requests.get(
-                f"http://localhost:8000/api/bot/market-data?index={bot_index}", 
-                timeout=5
-            )
-            data = response.json()
+            # Use Memory Box directly (like we fixed in manage_active_trades)
+            chain_data = market_state.get_option_chain(bot_index)
+            if chain_data:
+                chain = chain_data["chain"]
+            else:
+                chain = []
+    
+            spot_data = market_state.get_nifty_price()
+            if spot_data:
+                spot = spot_data["price"]
+            else:
+                spot = 0
+    
+            timestamp = time.time()  # Current time as timestamp
             
-            if not data.get("success"):
-                self.log_message(f"❌ Failed to get shared {bot_index} data")
-                return
-            
-            chain = data.get("data", [])
-            if not chain:
-                self.log_message("⚠️ Shared NIFTY chain is empty")
-                return
 
             # 🛑 ADD THIS CHECK (NEW CODE):
             # Check if chain has valid data (not all zeros)
+            # Check if chain has valid data (has OI or price)
             valid_strikes = 0
             for row in chain:
-                if float(row.get("call", {}).get("ltp", 0)) > 0 or float(row.get("put", {}).get("ltp", 0)) > 0:
+                call_oi = float(row.get("call", {}).get("oi", 0))
+                put_oi = float(row.get("put", {}).get("oi", 0))
+                call_ltp = float(row.get("call", {}).get("ltp", 0))
+                put_ltp = float(row.get("put", {}).get("ltp", 0))
+    
+                # Valid if: has OI OR has price
+                if call_oi > 0 or put_oi > 0 or call_ltp > 0 or put_ltp > 0:
                     valid_strikes += 1
 
             if valid_strikes < 5:  # If less than 5 strikes have valid data
                 self.log_message(f"⚠️ Chain quality poor: {valid_strikes}/{len(chain)} valid strikes. Skipping scan.")
+    
+                # 🔴 DEBUG: Log what's happening
+                print(f"\n🔴 PROBLEM DETECTED at {time.strftime('%H:%M:%S')}")
+                print(f"   Got {len(chain)} strikes from Memory Box")
+                print(f"   But only {valid_strikes} passed validation")
+    
+                if chain and len(chain) > 0:
+                    print(f"\n   Checking first 3 strikes:")
+                    for i in range(min(3, len(chain))):
+                        row = chain[i]
+                        strike = row.get("strike", "N/A")
+                        call_oi = float(row.get("call", {}).get("oi", 0))
+                        put_oi = float(row.get("put", {}).get("oi", 0))
+                        call_ltp = float(row.get("call", {}).get("ltp", 0))
+                        put_ltp = float(row.get("put", {}).get("ltp", 0))
+            
+                        is_valid = call_oi > 0 or put_oi > 0 or call_ltp > 0 or put_ltp > 0
+            
+                        print(f"   Strike {strike}: " +
+                              f"CE OI={call_oi}, PE OI={put_oi}, " +
+                              f"CE LTP={call_ltp}, PE LTP={put_ltp}, " +
+                              f"Valid? {is_valid}")
+                print("-" * 50 + "\n")
+    
                 return
-            
-            spot = data.get("spot", 0)
-            
-             # Log freshness with DETAILS
-            timestamp = data.get("timestamp", 0)
-            current_time_now = time.time()
-            age = current_time_now - timestamp
-            if age > 2:
-                self.log_message(f"⛔ STALE DATA ({age:.1f}s) — scan skipped")
-                return
-            print(f"📤 READ {bot_index} | ts={timestamp} | age={age:.1f}")
-
-            
-            self.log_message(f"🕒 Data Age: {age:.1f} seconds (fresh if < 5)")
-            if data.get("is_fresh"):
-                self.log_message("✅ Using FRESH shared NIFTY data")
-            else:
-                self.log_message("⚠️ Using STALE shared NIFTY data")
                 
             # Find highest OI strikes
             best_ce, best_pe = self.tracker.find_highest_oi(chain)

@@ -19,6 +19,7 @@ from config import MASTERPATH, BFO_MASTERPATH, USERS_FILE, SESSION_FILE, MY_MPIN
 
 logger = logging.getLogger(__name__)
 
+
 class KotakNiftyAPI:
     def __init__(self):
         self.active_sessions = {} 
@@ -511,13 +512,32 @@ class KotakNiftyAPI:
                 spot_url = f"{current_session['base_url']}/script-details/1.0/quotes/neosymbol/{exch_seg}|{spot_symbol}"
                 
                 try:
-                    r_spot = self.api_session.get(spot_url, headers=self.get_headers(), timeout=5)
-                    spot = 0
+                   
+                    
+                    # Longer timeout for large strike counts
+                    timeout_seconds = 4 if int(strikes) > 20 else 3
+                    r_spot = self.api_session.get(spot_url, headers=self.get_headers(), timeout=timeout_seconds)
+
+
+                    spot = 0  # Default
                     if r_spot.status_code == 200:
                         d = r_spot.json()
-                        if isinstance(d, list): spot = float(d[0]['ltp'])
-                        elif 'data' in d: spot = float(d['data'][0]['ltp'])
-                except: spot = 0 
+                        ltp_value = None
+        
+                        if isinstance(d, list) and len(d) > 0:
+                            ltp_value = d[0].get('ltp')
+                        elif isinstance(d, dict) and 'data' in d and len(d['data']) > 0:
+                            ltp_value = d['data'][0].get('ltp')
+        
+                        # Handle empty string
+                        if ltp_value and str(ltp_value).strip() != "":
+                            try:
+                                spot = float(ltp_value)
+                            except:
+                                spot = 0
+                except Exception as e:
+                    print(f"⚠️ Spot fetch error: {e}")
+                    spot = 0
             
             # Token Map Logic
             token_map = {}
@@ -588,7 +608,11 @@ class KotakNiftyAPI:
                 def fetch_chunk(chunk):
                     q_url = f"{current_session['base_url']}/script-details/1.0/quotes/neosymbol/{','.join(chunk)}"
                     try:
-                        q_r = self.api_session.get(q_url, headers=self.get_headers(), timeout=5)
+                        timeout_seconds = 4 if int(strikes) > 20 else 3
+                        q_r = self.api_session.get(q_url, headers=self.get_headers(), timeout=timeout_seconds)
+
+                        
+
                         if q_r.status_code == 200:
                             res = q_r.json()
                             items = res['data'] if isinstance(res, dict) and 'data' in res else res

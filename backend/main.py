@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import copy
 from trade_history import save_trade_to_history
-
+from market_state import market_state  # <-- ADD THIS LINE
 import threading
 from strategy.engine import StrategyEngine
 import strategy.strategy_config as config
@@ -69,11 +69,18 @@ def add_system_log(message):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # === STARTUP LOGIC (Runs once when server starts) ===
-    # 1. Connect the Logger (Hand over the microphone)
+    print("🚀 Starting background fetcher...")
+    
+    # 1. Start background fetcher thread
+    fetcher_thread = threading.Thread(target=background_fetcher, daemon=True)
+    fetcher_thread.start()
+    print(f"✅ Fetcher thread started: {fetcher_thread.is_alive()}")
+    
+    # 2. Connect the Logger
     bot_engine.log_func = add_system_log
     print("✅ LOGGER CONNECTED: Engine -> Dashboard")
     
-    # 2. Force load config
+    # 3. Force load config
     import strategy.strategy_config as config
     print(f"📊 Current Mode: {'DEMO' if config.USE_DEMO_DATA else 'LIVE'}")
     
@@ -81,7 +88,6 @@ async def lifespan(app: FastAPI):
     
     # === SHUTDOWN LOGIC (Runs when you Ctrl+C) ===
     print("🛑 Server Shutting Down...")
-
 # ======================================================
 # 4. CREATE APP (Now 'lifespan' is defined, so this works!)
 # ======================================================
@@ -602,8 +608,36 @@ def index_quotes():
                         result.append({"name": "MIDCPNIFTY", "ltp": f"{ltp:.2f}"})
         except:
             pass  # Skip if can't get futures price
-            
-        return result
+        
+        
+        
+        # ✅ NEW: Write NIFTY price to Memory Box for bot
+        # ✅ Write index prices to Memory Box (NIFTY, BANKNIFTY, SENSEX)
+        for item in result:
+            try:
+                name = item.get("name", "").upper()
+                print(f"🔍 RAW: '{item.get('name')}'")
+                price = float(item.get("ltp", 0))
+                print(f"🔍 TRYING: {name} = {price}")
+
+                price = float(item.get("ltp", 0))
+
+                if name == "NIFTY 50":
+                    market_state.update_index("NIFTY", price)
+                elif name == "BANK NIFTY":
+                    market_state.update_index("BANKNIFTY", price)
+                elif name == "SENSEX":
+                    market_state.update_index("SENSEX", price)
+                elif name == "FINNIFTY":
+                    market_state.update_index("FINNIFTY", price)
+
+
+
+            except Exception as e:
+                print(f"❌ Failed to update Memory Box for {item}: {e}")
+
+        
+        return result  # Dashboard still gets same data unchanged!
         
     except Exception as e:
         logger.error(f"Index quotes error: {e}")
@@ -680,63 +714,7 @@ def lot_size(symbol: str = Query(...), segment: str = Query("NFO")):
     except:
         return {"success": True, "lot_size": 1}
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
-# DEMO MODE API
-@app.post("/api/demo/move-prices")
-def move_demo_prices():
-    """Move demo prices randomly"""
-    from strategy.demo_data import demo
-    
-    # Move spot
-    demo.spot += random.randint(-50, 50)
-    
-    # Get new chain
-    chain = demo.get_chain()
-    
-    # Find highest OI CE and PE
-    highest_ce = max(chain, key=lambda x: x["call"]["oi"])
-    highest_pe = max(chain, key=lambda x: x["put"]["oi"])
-    
-    return {
-        "success": True,
-        "data": chain,
-        "spot": demo.spot,
-        "highest_ce": highest_ce["strike"],
-        "highest_pe": highest_pe["strike"],
-        "message": "Prices moved!"
-    }
 
-# ======================================================
-# NEW API: BOT GETS MARKET DATA FOR ANY INDEX
-# ======================================================
-@app.get("/api/bot/market-data")
-def get_bot_market_data(index: str = "NIFTY"):
-    """Bot gets data for any index from shared storage"""
-    # Clean the index name
-    safe_index = index.upper().strip()
-    
-    # Get data from shared storage
-    data = shared_market.get_index_data(safe_index)
-    
-    if data is None:
-        return {
-            "success": False,
-            "message": f"No data found for {safe_index}. Dashboard may not be fetching this index."
-        }
-    
-    # Check freshness (less than 5 seconds old)
-    is_fresh = (time.time() - data.get("timestamp", 0)) < 5
-    
-    return {
-        "success": True,
-        "index": safe_index,
-        "data": data.get("chain", []),
-        "spot": data.get("spot", 0),
-        "highest_ce": data.get("highest_ce", 0),
-        "highest_pe": data.get("highest_pe", 0),
-        "timestamp": data.get("timestamp", 0),
-        "is_fresh": is_fresh,
-        "message": f"✅ Fresh {safe_index} data" if is_fresh else f"⚠️ {safe_index} data may be stale"
-    }
 @app.get("/api/strategy/config")
 def get_strategy_config():
     return {
@@ -763,22 +741,6 @@ def get_strategy_config():
         }
     }
 
-# ======================================================
-# NEW API: DASHBOARD GETS BOT'S TRADING CONFIG
-# ======================================================
-@app.get("/api/bot/config/indices")
-def get_bot_trading_indices():
-    """Dashboard calls this to know which indices bot trades"""
-    import strategy.strategy_config as config
-    
-    # Get the list from config (default to ["NIFTY"] if not set)
-    indices = getattr(config, "BOT_TRADED_INDICES", ["NIFTY"])
-    
-    return {
-        "success": True,
-        "bot_traded_indices": indices,
-        "message": f"Bot trades {len(indices)} indices: {', '.join(indices)}"
-    }
 
 
 @app.get("/api/trade-history")
@@ -846,6 +808,320 @@ def get_exited_trades():
         "exited_trades": exited_list,
         "total_pnl": round(total_pnl, 2)
     }
+# ======================================================
+# DASHBOARD CONTROL API (New)
+# ======================================================
+
+# Store current dashboard selection
+dashboard_selection = {
+    "index": "NIFTY",  # Default
+    "strikes": 10,      # Default
+    "active": False     # No dashboard open yet
+}
+
+@app.post("/api/dashboard/select-index")
+def dashboard_select_index(index: str = Form("NIFTY"), strikes: str = Form("10")):
+    """
+    Dashboard calls this when user selects an index
+    Example: index="SENSEX", strikes="20"
+    """
+    global dashboard_selection
+    
+    try:
+        strikes_int = int(strikes)
+        if strikes_int < 5:
+            strikes_int = 5
+        if strikes_int > 50:
+            strikes_int = 50
+    except:
+        strikes_int = 10
+    
+    dashboard_selection = {
+        "index": index.upper().strip(),
+        "strikes": strikes_int,
+        "active": True,
+        "timestamp": time.time()
+    }
+    
+    print(f"📊 Dashboard selected: {index.upper()} ({strikes_int} strikes)")
+    
+    # ✅ NEW: Trigger immediate fetch in background
+    try:
+        # Import the function if needed
+        fetch_dashboard_index()
+        print(f"🚀 Triggered immediate fetch for {index.upper()}")
+    except Exception as e:
+        print(f"⚠️ Failed to trigger immediate fetch: {e}")
+    
+    return {
+        "success": True,
+        "message": f"Now storing {index.upper()} data"
+    }
+@app.post("/api/dashboard/close")
+def dashboard_closed():
+    """
+    Dashboard calls this when user closes option chain window
+    """
+    global dashboard_selection
+    dashboard_selection["active"] = False
+    print("📊 Dashboard closed - stopping index storage")
+    return {"success": True, "message": "Dashboard storage stopped"}
+
+@app.get("/api/dashboard/status")
+def dashboard_status():
+    """
+    Check what dashboard wants to see
+    """
+    return {
+        "success": True,
+        "selection": dashboard_selection,
+        "is_active": dashboard_selection["active"]
+    }
+# ======================================================
+# BACKGROUND FETCHER THREAD
+# ======================================================
+import threading
+
+def background_fetcher():
+    """Continuously fetch data for bot and dashboard"""
+    while True:
+        try:
+           
+            # 1. ALWAYS: Fetch NIFTY for bot
+            fetch_nifty_for_bot()
+            
+            # 2. If dashboard is active, fetch its selected index
+            if dashboard_selection["active"]:
+                fetch_dashboard_index()
+                
+        except Exception as e:
+            print(f"⚠️ Fetcher error: {e}")
+        
+        # Wait 1 second between cycles
+        time.sleep(1)
+
+def fetch_nifty_for_bot():
+    
+    """Fetch ALL index prices (for bot and dashboard)"""
+    if not kotak_api.current_user:
+        return
+    
+    try:
+        base_url = kotak_api.active_sessions[kotak_api.current_user]["base_url"]
+        
+        # Fetch ALL indices in one call
+        response = requests.get(
+            f"{base_url}/script-details/1.0/quotes/neosymbol/nse_cm|Nifty 50,nse_cm|Nifty Bank,bse_cm|SENSEX",
+            headers=kotak_api.get_headers(),
+            timeout=3
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            quotes = data if isinstance(data, list) else data.get('data', [])
+            
+            for quote in quotes:
+                symbol = quote.get('exchange_token', '')
+                ltp = float(quote.get('ltp', 0))
+                
+                # Map to index names
+                if "Nifty 50" in str(symbol):
+                    market_state.update_index("NIFTY", ltp)
+                    # Also fetch NIFTY option chain for bot
+                    fetch_nifty_options(ltp)
+                elif "Nifty Bank" in str(symbol):
+                    market_state.update_index("BANKNIFTY", ltp)
+                elif "SENSEX" in str(symbol):
+                    market_state.update_index("SENSEX", ltp)
+                    
+    except:
+        pass
+def fetch_nifty_options(nifty_price: float):
+    
+    """Fetch NIFTY option chain (ATM ±12 strikes)"""
+    try:
+        # Get current expiry
+        expiries = kotak_api.get_expiries("NIFTY", "NFO")
+        if not expiries:
+            return
+        
+        current_expiry = expiries[0]  # Nearest expiry
+        
+        # Fetch ±12 strikes (25 total strikes)
+        result = kotak_api.get_option_chain("NIFTY", current_expiry, "12")
+        
+        if result.get("success"):
+            chain = result.get("data", [])
+            if chain:
+                # Calculate ATM strike
+                atm_strike = round(nifty_price / 50) * 50
+                # Update Memory Box
+                market_state.update_option_chain("NIFTY", atm_strike, chain)
+                
+    except:
+        pass  # Silent fail
+
+def fetch_dashboard_index():
+   
+    """Fetch whatever index dashboard selected"""
+    if not kotak_api.current_user:
+        
+        return
+    # ✅ NEW: Check if CSV is loaded
+    if kotak_api.nfo_master_df is None:
+        print("⏳ NFO CSV still loading, skipping fetch...")
+        return
+    
+
+    
+    index = dashboard_selection["index"]
+    strikes = dashboard_selection["strikes"]
+    
+    
+    
+    try:
+        
+        segment = "NFO" if index in ["NIFTY", "BANKNIFTY", "FINNIFTY"] else "BFO"
+        
+        # Get expiries for this index
+        expiries = kotak_api.get_expiries(index, segment)
+        if not expiries:
+            return
+        
+        current_expiry = expiries[0]
+        
+        # Fetch option chain
+        result = kotak_api.get_option_chain(index, current_expiry, str(strikes))
+        
+        if result.get("success"):
+            # Handle empty string spot
+            spot_str = result.get("spot", "0")
+            spot = float(spot_str) if spot_str and str(spot_str).strip() != "" else 0
+
+
+            chain = result.get("data", [])
+            # ✅ NEW: Update spot price in Memory Box
+            if spot > 0:
+                market_state.update_index(index, spot)
+
+
+            
+            if spot > 0 and chain:
+                # For indices, calculate appropriate ATM
+                if index in ["NIFTY", "BANKNIFTY"]:
+                    atm_strike = round(spot / 50) * 50
+                elif index == "FINNIFTY":
+                    atm_strike = round(spot / 50) * 50
+                else:  # SENSEX, etc.
+                    atm_strike = round(spot / 100) * 100
+                
+                # Update Memory Box
+                market_state.update_option_chain(index, atm_strike, chain)
+                
+    except Exception as e:
+        print(f"⚠️ Failed to fetch {index}: {e}")
+
+# DASHBOARD READ API (Read from Memory Box)
+# ======================================================
+
+@app.get("/api/memory-box/index-price")
+def get_index_price(index: str = Query("NIFTY")):
+    """
+    Dashboard gets index price from Memory Box
+    Example: /api/memory-box/index-price?index=SENSEX
+    """
+    index_upper = index.upper().strip()
+    
+    # Get from Memory Box
+    if index_upper == "NIFTY":
+        data = market_state.get_nifty_price()
+    else:
+        # For other indices, check index_data
+        index_info = market_state.index_data.get(index_upper)
+        if index_info:
+            data = {
+                "price": index_info["value"],
+                "age": time.time() - index_info["timestamp"]
+            }
+        else:
+            data = None
+    
+    if data:
+        return {
+            "success": True,
+            "index": index_upper,
+            "price": data["price"],
+            "age_seconds": round(data["age"], 2),
+            "is_fresh": data["age"] < 5  # Less than 5 seconds old
+        }
+    else:
+        return {
+            "success": False,
+            "message": f"No data found for {index_upper} in Memory Box"
+        }
+
+@app.get("/api/memory-box/option-chain")
+def get_option_chain_from_memory(index: str = Query("NIFTY")):
+    """
+    Dashboard gets option chain from Memory Box
+    Example: /api/memory-box/option-chain?index=SENSEX
+    """
+    index_upper = index.upper().strip()
+    
+    # Get from Memory Box
+    chain_data = market_state.get_option_chain(index_upper)
+    
+    if chain_data:
+        # ALSO get current spot price
+        if index_upper == "NIFTY":
+            spot_data = market_state.get_nifty_price()
+        else:
+            index_info = market_state.index_data.get(index_upper)
+            spot_data = {
+                "price": index_info["value"],
+                "age": time.time() - index_info["timestamp"]
+            } if index_info else None
+    
+        response = {
+            "success": True,
+            "index": index_upper,
+            "atm_strike": chain_data["atm_strike"],
+            "chain": chain_data["chain"],
+            "age_seconds": round(chain_data["age"], 2),
+            "is_fresh": chain_data["age"] < 5,
+            "count": len(chain_data["chain"])
+        }
+    
+        # Add spot price if available
+        if spot_data:
+            response["spot"] = spot_data["price"]
+            response["spot_age"] = round(spot_data["age"], 2)
+    
+        return response
+    else:
+        return {
+            "success": False,
+            "message": f"No option chain found for {index_upper} in Memory Box"
+        }
+
+@app.get("/api/memory-box/status")
+def get_memory_box_status():
+    index_snapshot = {}
+
+    for symbol, info in market_state.index_data.items():
+        index_snapshot[symbol] = {
+            "value": info["value"],
+            "age": round(time.time() - info["timestamp"], 2)
+        }
+
+    return {
+        "success": True,
+        "timestamp": time.time(),
+        "indices": index_snapshot,            # ✅ ACTUAL PRICES HERE
+        "option_chains_stored": list(market_state.option_chain_data.keys()),
+        "dashboard_selection": dashboard_selection
+    }
+
 if os.path.exists(frontend_path): app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 if __name__ == "__main__":
     import uvicorn
