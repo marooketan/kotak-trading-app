@@ -1,69 +1,95 @@
+/*************************************************
+ * DASHBOARD MARKET DATA (INDEX SIDEBAR)
+ * SOURCE: MEMORY BOX ONLY
+ * SAFE FROM 0.00 POISONING
+ *************************************************/
+
+/**
+ * Flag to control background polling
+ */
 let isIndexQuotesActive = false;
 
-// 1. The Variable to hold the Timer (MUST BE HERE)
-let indexPriceInterval; 
+/**
+ * Timer reference (must be global)
+ */
+let indexPriceInterval = null;
 
+/**
+ * Fetch index prices from Memory Box
+ * READ-ONLY, SAFE, NO KOTAK CALLS
+ */
 function updateIndexPricesPopup() {
+    return;
+
     const win = document.getElementById('indexPricesWindow');
 
-    // 🛡️ ROBUST CHECK: Check if window is actually visible
-    // This stops the fetch if you close the window (even with CSS classes)
+    // 🛡️ Robust visibility check
     if (!win || window.getComputedStyle(win).display === 'none') {
-        console.log("🛑 Index Window Hidden. Stopping background fetch.");
-        stopIndexPriceUpdates(); 
+        console.log("🛑 Index Window Hidden. Stopping Memory Box fetch.");
+        stopIndexPriceUpdates();
         return;
     }
 
-    // Double check flag
     if (!isIndexQuotesActive) return;
 
-    fetch('/api/index-quotes')
+    fetch('/api/memory-box/status')
         .then(r => r.json())
         .then(data => {
-            if (Array.isArray(data)) {
-                data.forEach(item => {
-                    if (item.name === "NIFTY 50") {
-                        const el = document.getElementById('popupNiftyPrice');
-                        if (el) el.textContent = item.ltp;
-                    }
-                    if (item.name === "BANK NIFTY") {
-                        const el = document.getElementById('popupBankniftyPrice');
-                        if (el) el.textContent = item.ltp;
-                    }
-                    if (item.name === "FINNIFTY") {
-                        const el = document.getElementById('popupFinniftyPrice');
-                        if (el) el.textContent = item.ltp;
-                    }
-                    if (item.name === "MIDCPNIFTY") {
-                        const el = document.getElementById('popupMidcpniftyPrice');
-                        if (el) el.textContent = item.ltp;
-                    }
-                    if (item.name === "SENSEX") {
-                        const el = document.getElementById('popupSensexPrice');
-                        if (el) el.textContent = item.ltp;
-                    }
-                });
+            if (!data.success || !data.indices) return;
+
+            const indices = data.indices;
+
+            if (indices["NIFTY"]) {
+                const el = document.getElementById('popupNiftyPrice');
+                if (el) el.textContent = indices["NIFTY"].value;
+            }
+
+            if (indices["BANKNIFTY"]) {
+                const el = document.getElementById('popupBankniftyPrice');
+                if (el) el.textContent = indices["BANKNIFTY"].value;
+            }
+
+            if (indices["FINNIFTY"]) {
+                const el = document.getElementById('popupFinniftyPrice');
+                if (el) el.textContent = indices["FINNIFTY"].value;
+            }
+
+            if (indices["MIDCPNIFTY"]) {
+                const el = document.getElementById('popupMidcpniftyPrice');
+                if (el) el.textContent = indices["MIDCPNIFTY"].value;
+            }
+
+            if (indices["SENSEX"]) {
+                const el = document.getElementById('popupSensexPrice');
+                if (el) el.textContent = indices["SENSEX"].value;
             }
         })
-        .catch(error => console.error('Error fetching index prices:', error));
+        .catch(error => {
+            console.error("❌ Memory Box status fetch error:", error);
+        });
 }
 
+/**
+ * Start polling index prices (Memory Box)
+ */
 function startIndexPriceUpdates() {
     isIndexQuotesActive = true;
-    
+
     // Run once immediately
     updateIndexPricesPopup();
-    
-    // Start the timer if it's not already running
+
+    // Start interval only if not running
     if (!indexPriceInterval) {
-        indexPriceInterval = setInterval(updateIndexPricesPopup, 500); 
+        indexPriceInterval = setInterval(updateIndexPricesPopup, 1000);
     }
 }
 
+/**
+ * Stop polling index prices
+ */
 function stopIndexPriceUpdates() {
     isIndexQuotesActive = false;
 
-    // Kill the timer using the variable we defined at the top
     if (indexPriceInterval) {
         clearInterval(indexPriceInterval);
         indexPriceInterval = null;

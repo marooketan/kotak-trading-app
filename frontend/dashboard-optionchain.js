@@ -1,4 +1,7 @@
+
+let lastKnownSpotPrice = 0;
 let lastOCLogTime = 0;
+
 const OC_LOG_INTERVAL = 5 * 60 * 1000;
 
 window.showOIATP = false;
@@ -6,10 +9,11 @@ window.showOIATP = false;
 
 class OptionChainManager {
 constructor(dashboard, activityManager) {
-
     this.dashboard = dashboard;
     this.activityManager = activityManager;
     this.hasInitialLoad = false;
+    this.initialAtmStrike = null;  // ← CHANGE THIS
+    this.lastStrikes = null;
 }
     loadExpiries() {
         return this.dashboard.loadExpiries();
@@ -30,195 +34,157 @@ constructor(dashboard, activityManager) {
           this.loadOptionChain();
     }
 
-    async loadOptionChain() {
-   const t0 = performance.now();
-   const now = Date.now();
-   if (now - lastOCLogTime > OC_LOG_INTERVAL) {
-    console.log('[OC] Start fetch');
-   }
-
-    
-
-    // 1. RACE CONDITION HANDLING
-if (this.isFetching) {
-    if (this.fetchController) {
-        try {
-            this.fetchController.abort();
-            console.log("🔥 Aborted old request");
-        } catch (e) {
-            // Ignore abort errors
-        }
-    }
-    // Reset the flag so new request can start
-    this.isFetching = false;
-}
-   
-// 2. SETUP NEW REQUEST
-this.fetchController = new AbortController();
-this.isFetching = true;
-this.lastFetchTime = Date.now();
-this.requestCounter = (this.requestCounter || 0) + 1;
-const currentTicket = this.requestCounter;
-
-
-    
-
-   
-    
-    // 3. GET VALUES
-    const market = document.getElementById('marketType')?.value || 'NFO';
-    const index = document.getElementById('indexSelect')?.value || 'NIFTY';
-    const expiry = document.getElementById('expirySelect')?.value;
-    const strikes = document.getElementById('strikeCount')?.value || '10';
-
-    if (!expiry) {
-    console.log("⏳ Waiting for expiry...")
-    setTimeout(() => this.loadOptionChain(), 100)
-    return
-}
-
-
-    // === 3.5 FIX: SILENT LOADING ===
-    const optionTable = document.getElementById('optionTable');
-    const loadingDiv = document.getElementById('loading');
-    
-    if (!optionTable || optionTable.style.display === 'none') {
-        if (loadingDiv) loadingDiv.style.display = 'block';
-    }
-
-    try {
-        // 4. FETCH with timeout
-        const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), 5000); // 5 second timeout
-        
-        // Combine abort signals: user cancellation OR timeout
-        const combinedAbortController = new AbortController();
-        
-        // Listen to both abort signals
-        if (!this.fetchController) {
-    this.fetchController = new AbortController();
-}
-
-this.fetchController.signal.addEventListener('abort', () => {
-    combinedAbortController.abort();
-});
-
-
-        timeoutController.signal.addEventListener('abort', () => {
-            combinedAbortController.abort();
-        });
-        
-        
-
-        
-        const recenterFlag = this.activityManager.isUserIdle() ? "true" : "false";
-
-        const response = await fetch(
-            `/api/option-chain?index=${index}&expiry=${expiry}&strikes=${strikes}&segment=${market}&recenter=${recenterFlag}`,
-            { signal: combinedAbortController.signal }
-        );
-        
-        clearTimeout(timeoutId); // Cancel timeout if successful
-        const data = await response.json();
-        
-        const t1 = performance.now();
+async loadOptionChain() {
+        const t0 = performance.now();
         const now = Date.now();
         if (now - lastOCLogTime > OC_LOG_INTERVAL) {
-        console.log('[OC] Fetch time:', (t1 - t0).toFixed(2), 'ms');
-        lastOCLogTime = now;
+            console.log('[OC] Start fetch');
         }
 
-
-
-        // 🔥 FIX: Reset retry counter on SUCCESS only
-        this.optionChainRetryCount = 0;
-
-        // 5. CHECK TICKET
-        if (this.requestCounter !== currentTicket) return;
-
-        if (data.success) {
-    const now = Date.now();
-    if (now - lastOCLogTime > OC_LOG_INTERVAL) {
-        console.log('[OC] Start render');
-    }
-
-            this.displayOptionChain(data.data, data.spot, index);
-
-
-            
-            // Hide loading only after success
-            if (loadingDiv) loadingDiv.style.display = 'none';
-            
-        } else {
-            console.error("Option Chain Error:", data.message);
-            if (loadingDiv) {
-                loadingDiv.textContent = data.message;
-                loadingDiv.style.display = 'block';
-            }
-        const t3 = performance.now();
-        console.log('[OC] Render time:', (t3 - t2).toFixed(2), 'ms');
-        console.log('[OC] Total time:', (t3 - t0).toFixed(2), 'ms');
-
-        }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error('Fetch error:', error);
-            
-            // 🔥 FIX: Auto-retry logic (counter persists between retries)
-            if (this.optionChainRetryCount < 2) { // Try max 2 times
-                this.optionChainRetryCount++;
-                console.log(`🔄 Option Chain retry attempt ${this.optionChainRetryCount}/2`);
-                
-                // Show retry message (only if table is not visible)
-                if (!optionTable || optionTable.style.display === 'none') {
-                    if (loadingDiv) {
-                        loadingDiv.innerHTML = `
-                            <div class="loading-spinner">
-                                📡 Loading Option Chain... Retrying (${this.optionChainRetryCount}/2)
-                            </div>
-                        `;
-                        loadingDiv.style.display = 'block';
-                    }
-                }
-                
-                // Wait 2 seconds then retry
-                setTimeout(() => {
-                    this.loadOptionChain();
-                }, 2000);
-            } else {
-                // Max retries reached - show final error
-                this.optionChainRetryCount = 0; // Reset for next time
-                
-                // Only show error if table is not visible
-                if (!optionTable || optionTable.style.display === 'none') {
-                    if (loadingDiv) {
-                        if (error.name === 'AbortError') {
-                            loadingDiv.innerHTML = `
-                                <div class="loading-error">
-                                    ⏱️ Server timeout after 3 attempts. Click "Refresh" to try again.
-                                </div>
-                            `;
-                        } else {
-                            loadingDiv.innerHTML = `
-                                <div class="loading-error">
-                                    🌐 Network error after 3 attempts. Click "Refresh" to try again.
-                                </div>
-                            `;
-                        }
-                        loadingDiv.style.display = 'block';
-                    }
+        // 1. RACE CONDITION HANDLING
+        if (this.isFetching) {
+            if (this.fetchController) {
+                try {
+                    this.fetchController.abort();
+                    console.log("🔥 Aborted old request");
+                } catch (e) {
+                    // Ignore abort errors
                 }
             }
-        }
-    } finally {
-        if (this.requestCounter === currentTicket) {
             this.isFetching = false;
-            this.scheduleNextUpdate();
+        }
 
+        // 2. SETUP NEW REQUEST
+        this.fetchController = new AbortController();
+        this.isFetching = true;
+        this.lastFetchTime = Date.now();
+        this.requestCounter = (this.requestCounter || 0) + 1;
+        const currentTicket = this.requestCounter;
 
+        // 3. GET VALUES
+        const market = document.getElementById('marketType')?.value || 'NFO';
+        const index = document.getElementById('indexSelect')?.value || 'NIFTY';
+        const expiry = document.getElementById('expirySelect')?.value;
+        const strikes = document.getElementById('strikeCount')?.value || '10';
+
+        if (!expiry) {
+            console.log("⏳ Waiting for expiry...")
+            setTimeout(() => this.loadOptionChain(), 100)
+            return
+        }
+
+        // 3.5 SHOW LOADING IF HIDDEN
+        const optionTable = document.getElementById('optionTable');
+        const loadingDiv = document.getElementById('loading');
+
+        if (!optionTable || optionTable.style.display === 'none') {
+            if (loadingDiv) loadingDiv.style.display = 'block';
+        }
+
+        // ✅ NEW: SMART CHECK (Fixes the Spam!)
+        // If the strike count changed since last time, tell the backend ONCE.
+        if (this.lastStrikes !== strikes) {
+            console.log(`🔄 Strikes changed from ${this.lastStrikes} to ${strikes}. Updating backend...`);
+            this.lastStrikes = strikes; 
+            await this.updateBackendSelection(); 
+        }
+
+        try {
+            // 4. FETCH with timeout
+            const timeoutController = new AbortController();
+            const timeoutId = setTimeout(() => timeoutController.abort(), 5000); 
+
+            const combinedAbortController = new AbortController();
+
+            if (!this.fetchController) {
+                this.fetchController = new AbortController();
+            }
+
+            this.fetchController.signal.addEventListener('abort', () => {
+                combinedAbortController.abort();
+            });
+
+            timeoutController.signal.addEventListener('abort', () => {
+                combinedAbortController.abort();
+            });
+
+            // ✅ READ ONLY (No more spamming POST here)
+            const response = await fetch(
+                `/api/memory-box/option-chain?index=${index}`,
+                { signal: combinedAbortController.signal }
+            );
+
+            clearTimeout(timeoutId); 
+            const data = await response.json();
+
+            const t1 = performance.now();
+            if (now - lastOCLogTime > OC_LOG_INTERVAL) {
+                console.log('[OC] Fetch time:', (t1 - t0).toFixed(2), 'ms');
+                lastOCLogTime = now;
+            }
+
+            // Reset retry counter on SUCCESS only
+            this.optionChainRetryCount = 0;
+
+            // 5. CHECK TICKET
+            if (this.requestCounter !== currentTicket) return;
+
+            if (data.success) {
+                if (now - lastOCLogTime > OC_LOG_INTERVAL) {
+                    console.log('[OC] Start render');
+                }
+
+                const chainData = data.chain || data.data || [];
+                
+
+                const spotPrice = data.spot || (data.index && data.index.price) || 0;
+
+                this.displayOptionChain(chainData, spotPrice, index);
+
+                if (loadingDiv) loadingDiv.style.display = 'none';
+
+            } else {
+                console.error("Option Chain Error:", data.message);
+                if (loadingDiv) {
+                    loadingDiv.textContent = data.message;
+                    loadingDiv.style.display = 'block';
+                }
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('Fetch error:', error);
+
+                if (this.optionChainRetryCount < 2) { 
+                    this.optionChainRetryCount++;
+                    console.log(`🔄 Option Chain retry attempt ${this.optionChainRetryCount}/2`);
+
+                    if (!optionTable || optionTable.style.display === 'none') {
+                        if (loadingDiv) {
+                            loadingDiv.innerHTML = `<div class="loading-spinner">📡 Loading Option Chain... Retrying (${this.optionChainRetryCount}/2)</div>`;
+                            loadingDiv.style.display = 'block';
+                        }
+                    }
+
+                    setTimeout(() => {
+                        this.loadOptionChain();
+                    }, 2000);
+                } else {
+                    this.optionChainRetryCount = 0; 
+                    if (!optionTable || optionTable.style.display === 'none') {
+                        if (loadingDiv) {
+                            loadingDiv.innerHTML = `<div class="loading-error">🌐 Network error after 3 attempts.</div>`;
+                            loadingDiv.style.display = 'block';
+                        }
+                    }
+                }
+            }
+        } finally {
+            if (this.requestCounter === currentTicket) {
+                this.isFetching = false;
+                this.scheduleNextUpdate();
+            }
         }
     }
-}
 
 
  displayOptionChain(data, spotPrice, index) {
@@ -305,7 +271,18 @@ this.fetchController.signal.addEventListener('abort', () => {
         const strikeInterval = this.getStrikeInterval(index);
 
 
-        const atmStrike = Math.round(spotPrice / strikeInterval) * strikeInterval;
+        // Calculate current ATM from spot price
+const currentATM = Math.round(spotPrice / strikeInterval) * strikeInterval;
+
+// Use initial ATM if we have it, otherwise use current and save it
+if (!this.initialAtmStrike && needRebuild) {
+    this.initialAtmStrike = currentATM;
+}
+const atmStrike = this.initialAtmStrike || currentATM;
+
+
+
+
         // Save data globally for basket LTP
 window.optionChainData = data.map(row => ({
     symbol: row.call.pTrdSymbol || row.put.pTrdSymbol,
@@ -332,10 +309,28 @@ if (typeof updateBasketLTP === 'function' &&
     setTimeout(updateBasketLTP, 50);
 }
 
+// ✅ Save spotPrice to localStorage for later use
+try {
+    localStorage.setItem('optionChainData', JSON.stringify({
+        spotPrice: spotPrice,
+        timestamp: Date.now()
+    }));
+} catch (e) {
+    console.error("Failed to save spotPrice to localStorage:", e);
+}
+
+
+
         if (needRebuild) {
             tbody.innerHTML = data.map(row => {
                 const isATM = row.strike === atmStrike;
-                const atmStyle = isATM ? 'background-color: #fff9c4;' : '';
+const atmStyle = isATM ? 'background-color: #fff9c4;' : '';if (isATM) {
+   
+}
+
+
+
+
                 const ceSymbol = row.call.pTrdSymbol || '';
                 const peSymbol = row.put.pTrdSymbol || '';
 
@@ -362,7 +357,10 @@ if (typeof updateBasketLTP === 'function' &&
                this.hasInitialLoad = true;
                applyOIATPToggle();
 
-        } else {
+       } else {
+    // Use saved data from localStorage
+   
+   
             data.forEach(row => {
                
                 updateCell(`ce-bid-${row.strike}`, row.call.bid);
@@ -387,12 +385,10 @@ if (typeof updateBasketLTP === 'function' &&
 
                 const tr = document.getElementById(`row-${row.strike}`);
                 if (tr) {
-                    //const isATM = row.strike === atmStrike;
-                    //if (isATM) tr.style.backgroundColor = '#fff9c4';
-                    //else tr.style.backgroundColor = '';
+                    
 
                     tr.className = row.strike < spotPrice ? 'itm' : 'otm';
-
+                
                     const strikeCell = document.getElementById(`strike-cell-${row.strike}`);
                     if (strikeCell) {
                         //const hasATM = strikeCell.innerHTML.includes('ATM');
@@ -433,10 +429,48 @@ if (typeof updateBasketLTP === 'function' &&
         if (optionTable) optionTable.style.display = show ? 'none' : 'table';
         if (tbody && show) tbody.innerHTML = '';
     }
-    async loadExpiries() {
-        this.hasInitialLoad = false; // Reset for new market/index
-        const indexSelect = document.getElementById('indexSelect');
-        const expirySelect = document.getElementById('expirySelect');
+async updateBackendSelection() {
+    const index = document.getElementById('indexSelect')?.value || 'NIFTY';
+    const strikes = document.getElementById('strikeCount')?.value || '10';
+
+    try {
+        console.log(`📢 Telling Backend: Switch to ${index}`);
+        
+        // 1. Show loading immediately
+        this.showOptionChainLoading(true);
+        
+        // 2. Tell backend to switch
+        await fetch(`/api/dashboard/select-index`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `index=${index}&strikes=${strikes}`
+        });
+        
+        // 3. Wait for backend to start fetching (small delay)
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // 4. Force load option chain NOW (don't wait for next heartbeat)
+        await this.loadOptionChain();
+        
+        // 5. Hide loading (loadOptionChain will hide it on success)
+        
+    } catch (e) {
+        console.error("Failed to update backend selection", e);
+        this.showOptionChainLoading(false, true);
+    }
+}
+
+
+   async loadExpiries() {
+    // ✅ RESET ATM when index changes
+    this.initialAtmStrike = null;
+    this.hasInitialLoad = false;
+    
+    const indexSelect = document.getElementById('indexSelect');
+    this.updateBackendSelection();
+    const expirySelect = document.getElementById('expirySelect');
+    
+    
         
         // 1. Get the current choice (NIFTY or BANKNIFTY)
         const selectedIndex = indexSelect.value; 
@@ -492,7 +526,9 @@ if (typeof updateBasketLTP === 'function' &&
 }
 
 window.OptionChainManager = OptionChainManager;
+
 document.addEventListener('change', (e) => {
+    // Only handle the OI/ATP toggle here
     if (e.target && e.target.id === 'oiAtpToggle') {
         window.showOIATP = e.target.checked;
     }

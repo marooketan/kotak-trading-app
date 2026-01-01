@@ -1064,68 +1064,6 @@ function showIndexPricesWindow() {
 
 
 
-// ======================================================
-// SIMPLE BOT DATA FETCHER (CLEAN & SIMPLE)
-// ======================================================
-class SimpleBotFetcher {
-    constructor() {
-        this.timer = null;
-        this.niftyExpiry = null;
-    }
-    
-    async start() {
-        console.log("🤖 Starting Simple Bot Fetcher...");
-        await this.getNearestExpiry();
-        
-        if (this.niftyExpiry) {
-            // Fetch every 2 seconds (faster updates for bot)
-            this.timer = setInterval(() => {
-                this.fetchNiftyForBot();
-            }, 2000); 
-            
-            // Fetch immediately once
-            this.fetchNiftyForBot();
-        } else {
-            console.log("🤖 Could not get expiry, retrying in 5s");
-            setTimeout(() => this.start(), 5000);
-        }
-    }
-    
-    stop() {
-        if (this.timer) clearInterval(this.timer);
-        console.log("🤖 Bot Fetcher Stopped");
-    }
-    
-    async getNearestExpiry() {
-        try {
-            const response = await fetch('/api/expiries-v2?index=NIFTY&segment=NFO');
-            const data = await response.json();
-            
-            if (data.success && data.expiries && data.expiries.length > 0) {
-                // 🧠 SIMPLE LOGIC: The backend already sorts by date.
-                // The first item is ALWAYS the nearest/current expiry.
-                this.niftyExpiry = data.expiries[0];
-                console.log(`🤖 Bot locked on Current Expiry: ${this.niftyExpiry}`);
-            }
-        } catch (error) {
-            console.log("🤖 Failed to get expiry:", error);
-        }
-    }
-    
-    async fetchNiftyForBot() {
-        if (!this.niftyExpiry) return;
-        
-        try {
-            // Fetch strikes=20 to give bot enough data
-            const url = `/api/option-chain?index=NIFTY&expiry=${encodeURIComponent(this.niftyExpiry)}&strikes=20&segment=NFO`;
-            await fetch(url);
-        } catch (error) {
-            // Ignore errors silently
-        }
-    }
-}
-
-window.botFetcher = new SimpleBotFetcher();
 
 
 

@@ -294,38 +294,48 @@ if (priceInput && setButton) {
         window.querySelector('.minimize-btn').addEventListener('click', () => this.toggleMinimize(window));
         this.windows.set('indexPricesWindow', window);
     }
+async updateIndexPrices() {
+    if (!this.openWindows.has('indexPricesWindow')) return;
+    if (this.isIndexFetching) return;
 
-    async updateIndexPrices() {
-    
-     // ⬇️ ADD THIS SAFETY CHECK ⬇️
-    if (!this.openWindows.has('indexPricesWindow')) {
-        console.log('❌ Index window closed, skipping update');
-        return;
+    this.isIndexFetching = true;
+
+    try {
+        const response = await fetch('/api/memory-box/status');
+        const data = await response.json();
+
+        if (!data.success || !data.indices) return;
+
+        const indices = data.indices;
+
+        if (indices.NIFTY) {
+            const el = document.getElementById('popupNiftyPrice');
+            if (el) el.textContent = indices.NIFTY.value;
+        }
+
+        if (indices.BANKNIFTY) {
+            const el = document.getElementById('popupBankniftyPrice');
+            if (el) el.textContent = indices.BANKNIFTY.value;
+        }
+
+        if (indices.SENSEX) {
+            const el = document.getElementById('popupSensexPrice');
+            if (el) el.textContent = indices.SENSEX.value;
+        }
+
+        if (indices.FINNIFTY) {
+            const el = document.getElementById('popupFinniftyPrice');
+            if (el) el.textContent = indices.FINNIFTY.value;
+        }
+
+    } catch (e) {
+        console.error('Index price update error:', e);
+    } finally {
+        this.isIndexFetching = false;
     }
-
-                   
-        if (this.isIndexFetching) return;
-        this.isIndexFetching = true;
-
-        try {
-            const response = await fetch('/api/index-quotes');
-            const data = await response.json();
-
-if (!Array.isArray(data)) {
-    console.warn('Index data not array:', data);
-    return;
 }
 
-data.forEach(item => {
-
-                if (item.exchange_token === "Nifty 50") document.getElementById('popupNiftyPrice').textContent = item.ltp;
-                if (item.exchange_token === "Nifty Bank") document.getElementById('popupBankniftyPrice').textContent = item.ltp;
-                if (item.exchange_token === "SENSEX") document.getElementById('popupSensexPrice').textContent = item.ltp;
-            });
-        } catch(e) { console.error('Index fetch error', e); }
-        finally { this.isIndexFetching = false; }
-    }
-    
+       
         // 🔥 NEW: Bring window to front
     bringWindowToFront(windowElement) {
         // Reset all windows to lower z-index
@@ -427,6 +437,8 @@ data.forEach(item => {
 }
 
     showWindow(windowId) {
+       console.log("STEP1: showWindow called for", windowId);
+ 
         const window = this.windows.get(windowId);
         if (window) {
             // 🔥 NEW: Add window to "open" list
